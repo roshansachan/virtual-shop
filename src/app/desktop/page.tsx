@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { Stage, Layer, Image as KonvaImage } from 'react-konva';
+import type Konva from 'konva';
 import useImage from 'use-image';
 
 // Custom hook for loading images
@@ -51,7 +52,7 @@ export default function DesktopPage() {
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
   const [backgroundImageSize, setBackgroundImageSize] = useState({ width: 1920, height: 1080 });
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const stageRef = useRef<any>(null);
+  const stageRef = useRef<Konva.Stage>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Set stage size based on window dimensions
@@ -188,7 +189,7 @@ export default function DesktopPage() {
   }, []);
 
   // Handle stage drag bounds
-  const handleStageDragBound = useCallback((pos: any) => {
+  const handleStageDragBound = useCallback((pos: { x: number; y: number }) => {
     const newX = Math.min(0, Math.max(-(backgroundImageSize.width - stageSize.width), pos.x));
     const newY = Math.min(0, Math.max(-(backgroundImageSize.height - stageSize.height), pos.y));
     return { x: newX, y: newY };

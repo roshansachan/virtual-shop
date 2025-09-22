@@ -117,22 +117,19 @@ export default function Home() {
 
     // Enhanced smooth scrolling properties
     container.style.scrollBehavior = 'smooth';
-    (container.style as any).webkitOverflowScrolling = 'touch';
+    (container.style as CSSStyleDeclaration & { webkitOverflowScrolling?: string }).webkitOverflowScrolling = 'touch';
     container.style.overscrollBehaviorX = 'contain';
     
-    let isScrolling = false;
     let scrollTimeout: NodeJS.Timeout;
     
     // Smooth scroll end detection
     const handleScrollStart = () => {
-      isScrolling = true;
       container.style.scrollBehavior = 'auto'; // Disable CSS smooth scroll during touch
     };
     
     const handleScrollEnd = () => {
       clearTimeout(scrollTimeout);
       scrollTimeout = setTimeout(() => {
-        isScrolling = false;
         container.style.scrollBehavior = 'smooth'; // Re-enable smooth scroll
       }, 150);
     };
@@ -245,9 +242,7 @@ export default function Home() {
       </div>
       
       {/* Scroll indicator */}
-      <div className="absolute top-4 left-4 bg-black/50 text-white px-3 py-1 rounded-full text-sm">
-        Swipe to explore →
-      </div>
+      
       
       {/* Items indicator */}
       {uploadedImages.length > 0 && (
