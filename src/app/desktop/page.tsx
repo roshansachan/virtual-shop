@@ -11,6 +11,7 @@ const useImageLoader = (src: string | null) => {
   return useImage(src || '', 'anonymous');
 };
 
+
 // Component for the Konva Image
 const KonvaImageComponent = ({ src, x, y, draggable = true, onDragEnd }: {
   src: string;
