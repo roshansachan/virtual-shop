@@ -132,6 +132,85 @@ export default function Home() {
     };
   };
 
+  // Get only the active image from each folder for rendering
+  const getActiveImages = () => {
+    const savedFolderData = localStorage.getItem('virtualStoreFolders');
+    if (!savedFolderData) {
+      // If no folder data, show all uploaded images (backward compatibility)
+      return uploadedImages;
+    }
+
+    try {
+      const folderData = JSON.parse(savedFolderData);
+      const activeImages: UploadedImage[] = [];
+
+      // Group uploaded images by folder
+      const imagesByFolder: { [key: string]: UploadedImage[] } = {};
+      const imagesWithoutFolder: UploadedImage[] = [];
+
+      uploadedImages.forEach(item => {
+        if (item.folderName) {
+          if (!imagesByFolder[item.folderName]) {
+            imagesByFolder[item.folderName] = [];
+          }
+          imagesByFolder[item.folderName].push(item);
+        } else {
+          imagesWithoutFolder.push(item);
+        }
+      });
+
+      // For each folder, find and add only the active image
+      Object.entries(imagesByFolder).forEach(([folderName, folderImages]) => {
+        const folder = folderData.folders?.find((f: Folder) => f.name === folderName);
+        if (folder) {
+          // Find the active image in the folder
+          const activeImageInFolder = folder.images.find((img: FolderImage) => img.visible);
+          if (activeImageInFolder) {
+            // Find the corresponding uploaded image
+            const activeUploadedImage = folderImages.find(item => item.src === activeImageInFolder.src);
+            if (activeUploadedImage) {
+              activeImages.push(activeUploadedImage);
+            }
+          }
+        } else {
+          // If folder not found in data, include all images from that folder
+          activeImages.push(...folderImages);
+        }
+      });
+
+      // Add images without folder names
+      activeImages.push(...imagesWithoutFolder);
+
+      return activeImages;
+    } catch (error) {
+      console.error('Error parsing folder data:', error);
+      return uploadedImages;
+    }
+  };
+
+  // Check if an item should be visible based on folder visibility settings
+  const isItemVisible = (item: UploadedImage) => {
+    // If no folder name, show the item (backward compatibility)
+    if (!item.folderName) return true;
+    
+    // Load folder data from localStorage
+    const savedFolderData = localStorage.getItem('virtualStoreFolders');
+    if (!savedFolderData) return true;
+    
+    try {
+      const folderData = JSON.parse(savedFolderData);
+      const folder = folderData.folders?.find((f: Folder) => f.name === item.folderName);
+      
+      if (!folder) return true;
+      
+      // Find the specific image in the folder and check if it's visible
+      const folderImage = folder.images.find((img: FolderImage) => img.src === item.src);
+      return folderImage ? folderImage.visible : true;
+    } catch {
+      return true; // If there's an error parsing, show the item
+    }
+  };
+
   // Handle hot-spot click
   const handleHotSpotClick = (item: UploadedImage) => {
     setSelectedItem(item);
@@ -143,7 +222,7 @@ export default function Home() {
       const folder = folderData.folders?.find((f: Folder) => f.name === item.folderName);
       
       if (folder) {
-        // Convert folder images to UploadedImage format for display
+        // Convert ALL folder images to UploadedImage format for display (not just visible ones)
         const folderImagesForDisplay = folder.images.map((img: FolderImage) => ({
           id: img.id,
           src: img.src,
@@ -154,6 +233,7 @@ export default function Home() {
           y: 0,
           folderName: folder.name
         }));
+        
         setFolderImages(folderImagesForDisplay);
       } else {
         // Fallback: just show the current item
@@ -177,6 +257,35 @@ export default function Home() {
   // Handle try-on functionality
   const handleTryOn = (imageToTryOn: UploadedImage) => {
     if (!selectedItem) return;
+
+    // Update folder visibility settings
+    if (imageToTryOn.folderName) {
+      const savedFolderData = localStorage.getItem('virtualStoreFolders');
+      if (savedFolderData) {
+        try {
+          const folderData = JSON.parse(savedFolderData);
+          const folderIndex = folderData.folders?.findIndex((f: Folder) => f.name === imageToTryOn.folderName);
+          
+          if (folderIndex !== -1) {
+            // Set all images in this folder to invisible
+            folderData.folders[folderIndex].images.forEach((img: FolderImage) => {
+              img.visible = false;
+            });
+            
+            // Set the selected image to visible
+            const imageIndex = folderData.folders[folderIndex].images.findIndex((img: FolderImage) => img.src === imageToTryOn.src);
+            if (imageIndex !== -1) {
+              folderData.folders[folderIndex].images[imageIndex].visible = true;
+            }
+            
+            // Save updated folder data
+            localStorage.setItem('virtualStoreFolders', JSON.stringify(folderData));
+          }
+        } catch (error) {
+          console.error('Error updating folder visibility:', error);
+        }
+      }
+    }
 
     // Create a new product overlay with the same position as the selected item
     const newItem: UploadedImage = {
@@ -298,7 +407,7 @@ export default function Home() {
           />
           
           {/* Overlay positioned furniture items */}
-          {uploadedImages.map((item) => {
+          {getActiveImages().map((item) => {
             const mobilePosition = convertToMobileCoordinates(item.x, item.y);
             const scaledDimensions = getScaledImageDimensions(item.width, item.height);
             
@@ -346,9 +455,9 @@ export default function Home() {
       
       
       {/* Items indicator */}
-      {uploadedImages.length > 0 && (
+      {getActiveImages().length > 0 && (
         <div className="absolute top-16 left-4 bg-blue-600/80 text-white px-3 py-1 rounded-full text-sm">
-          {uploadedImages.length} item{uploadedImages.length !== 1 ? 's' : ''} placed
+          {getActiveImages().length} item{getActiveImages().length !== 1 ? 's' : ''} placed
         </div>
       )}
       
@@ -361,7 +470,7 @@ export default function Home() {
           Design Studio
         </Link>
         
-        {uploadedImages.length > 0 && (
+        {getActiveImages().length > 0 && (
           <button
             onClick={() => {
               const savedImages = localStorage.getItem('virtualStoreImages');
