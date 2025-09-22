@@ -12,6 +12,7 @@ const useImageLoader = (src: string | null) => {
 };
 
 
+
 // Component for the Konva Image
 const KonvaImageComponent = ({ src, x, y, draggable = true, onDragEnd }: {
   src: string;
