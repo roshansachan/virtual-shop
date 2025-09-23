@@ -15,19 +15,19 @@ function getEnvVar(name: string): string {
 export function getS3Client(): S3Client {
   console.log('Creating S3 Client...');
   console.log('Environment check:');
-  console.log('AWS_ACCESS_KEY:', process.env.AWS_ACCESS_KEY ? 'SET' : 'NOT SET');
-  console.log('AWS_SECRET_KEY:', process.env.AWS_SECRET_KEY ? 'SET' : 'NOT SET');
+  console.log('AWS_ACCESS_KEY_ID:', process.env.AWS_ACCESS_KEY_ID ? 'SET' : 'NOT SET');
+  console.log('AWS_SECRET_ACCESS_KEY:', process.env.AWS_SECRET_ACCESS_KEY ? 'SET' : 'NOT SET');
   console.log('AWS_BUCKET_NAME:', process.env.AWS_BUCKET_NAME || 'NOT SET');
   console.log('AWS_REGION:', process.env.AWS_REGION || 'NOT SET');
 
-  const AWS_ACCESS_KEY = getEnvVar('AWS_ACCESS_KEY');
-  const AWS_SECRET_KEY = getEnvVar('AWS_SECRET_KEY');
+  const AWS_ACCESS_KEY_ID = getEnvVar('AWS_ACCESS_KEY_ID');
+  const AWS_SECRET_ACCESS_KEY = getEnvVar('AWS_SECRET_ACCESS_KEY');
   
   return new S3Client({
     region: getEnvVar('AWS_REGION'),
     credentials: {
-      accessKeyId: AWS_ACCESS_KEY,
-      secretAccessKey: AWS_SECRET_KEY,
+      accessKeyId: AWS_ACCESS_KEY_ID,
+      secretAccessKey: AWS_SECRET_ACCESS_KEY,
     },
   });
 }
