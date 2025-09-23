@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Stage, Layer, Image as KonvaImage } from 'react-konva';
@@ -156,7 +156,7 @@ interface FolderData {
   folders: Folder[];
 }
 
-export default function DesignStudioPage() {
+function DesignStudioContent() {
   const searchParams = useSearchParams();
   const sceneIdParam = searchParams.get('sceneId');
   
@@ -1681,5 +1681,18 @@ export default function DesignStudioPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function DesignStudioPage() {
+  return (
+    <Suspense fallback={<div className="h-screen flex items-center justify-center bg-gray-50">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
+        <p className="text-gray-600">Loading design studio...</p>
+      </div>
+    </div>}>
+      <DesignStudioContent />
+    </Suspense>
   );
 }

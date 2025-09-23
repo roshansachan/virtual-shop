@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
 interface UploadedImage {
@@ -43,7 +43,7 @@ interface Scene {
   backgroundImageS3Key?: string;
 }
 
-export default function Home() {
+function HomeContent() {
   const searchParams = useSearchParams();
   const sceneParam = searchParams.get('scene');
   const sceneIdParam = searchParams.get('sceneId');
@@ -576,5 +576,18 @@ export default function Home() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={<div className="w-full h-screen flex items-center justify-center bg-gray-100">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
+        <p className="text-gray-600">Loading scene...</p>
+      </div>
+    </div>}>
+      <HomeContent />
+    </Suspense>
   );
 }
