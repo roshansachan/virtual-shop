@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 interface UploadedImage {
   id: string;
@@ -13,6 +14,7 @@ interface UploadedImage {
   height: number;
   name: string;
   folderName?: string;
+  sceneId: string; // Add scene reference
 }
 
 interface FolderImage {
@@ -32,7 +34,20 @@ interface Folder {
   images: FolderImage[];
 }
 
+interface Scene {
+  id: string;
+  name: string;
+  backgroundImage: string;
+  backgroundImageSize: { width: number; height: number };
+  folders: Folder[];
+  backgroundImageS3Key?: string;
+}
+
 export default function Home() {
+  const searchParams = useSearchParams();
+  const sceneParam = searchParams.get('scene');
+  const sceneIdParam = searchParams.get('sceneId');
+  
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
   const [containerHeight, setContainerHeight] = useState(0);
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
@@ -40,7 +55,42 @@ export default function Home() {
   const [selectedItem, setSelectedItem] = useState<UploadedImage | null>(null);
   const [showDrawer, setShowDrawer] = useState(false);
   const [folderImages, setFolderImages] = useState<UploadedImage[]>([]);
+  const [currentScene, setCurrentScene] = useState<Scene | null>(null);
+  const [backgroundImageSrc, setBackgroundImageSrc] = useState<string>('/living-room.jpg');
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Load scene data from localStorage when component mounts or scene params change
+  useEffect(() => {
+    const loadSceneData = () => {
+      try {
+        const savedScenes = localStorage.getItem('virtualStoreScenes');
+        if (savedScenes && sceneIdParam) {
+          const scenes: Scene[] = JSON.parse(savedScenes);
+          const scene = scenes.find(s => s.id === sceneIdParam);
+          
+          if (scene) {
+            setCurrentScene(scene);
+            setBackgroundImageSrc(scene.backgroundImage);
+            setBackgroundImageNaturalSize(scene.backgroundImageSize);
+            return;
+          }
+        }
+        
+        // Fallback to default if no scene found or no sceneId provided
+        setCurrentScene(null);
+        setBackgroundImageSrc('/living-room.jpg');
+        setBackgroundImageNaturalSize({ width: 1920, height: 1080 });
+      } catch (error) {
+        console.error('Error loading scene data:', error);
+        // Fallback to default on error
+        setCurrentScene(null);
+        setBackgroundImageSrc('/living-room.jpg');
+        setBackgroundImageNaturalSize({ width: 1920, height: 1080 });
+      }
+    };
+
+    loadSceneData();
+  }, [sceneIdParam]);
 
   useEffect(() => {
     // Calculate image dimensions and container height
@@ -65,8 +115,8 @@ export default function Home() {
         height: img.naturalHeight
       });
     };
-    img.src = '/living-room.jpg';
-  }, []);
+    img.src = backgroundImageSrc;
+  }, [backgroundImageSrc]);
 
   // Load positioned items from localStorage
   useEffect(() => {
@@ -133,93 +183,65 @@ export default function Home() {
   };
 
   // Get only the active image from each folder for rendering
+  // Get only the active image from each folder for rendering, filtered by current scene
   const getActiveImages = () => {
-    const savedFolderData = localStorage.getItem('virtualStoreFolders');
-    if (!savedFolderData) {
-      // If no folder data, show all uploaded images (backward compatibility)
-      return uploadedImages;
+    // Filter images by current scene ID first
+    let sceneImages = uploadedImages;
+    if (currentScene) {
+      sceneImages = uploadedImages.filter(img => img.sceneId === currentScene.id);
     }
-
-    try {
-      const folderData = JSON.parse(savedFolderData);
-      const activeImages: UploadedImage[] = [];
-
-      // Group uploaded images by folder
-      const imagesByFolder: { [key: string]: UploadedImage[] } = {};
-      const imagesWithoutFolder: UploadedImage[] = [];
-
-      uploadedImages.forEach(item => {
-        if (item.folderName) {
-          if (!imagesByFolder[item.folderName]) {
-            imagesByFolder[item.folderName] = [];
-          }
-          imagesByFolder[item.folderName].push(item);
-        } else {
-          imagesWithoutFolder.push(item);
-        }
-      });
-
-      // For each folder, find and add only the active image
-      Object.entries(imagesByFolder).forEach(([folderName, folderImages]) => {
-        const folder = folderData.folders?.find((f: Folder) => f.name === folderName);
-        if (folder) {
-          // Find the active image in the folder
-          const activeImageInFolder = folder.images.find((img: FolderImage) => img.visible);
-          if (activeImageInFolder) {
-            // Find the corresponding uploaded image
-            const activeUploadedImage = folderImages.find(item => item.src === activeImageInFolder.src);
-            if (activeUploadedImage) {
-              activeImages.push(activeUploadedImage);
-            }
-          }
-        } else {
-          // If folder not found in data, include all images from that folder
-          activeImages.push(...folderImages);
-        }
-      });
-
-      // Add images without folder names
-      activeImages.push(...imagesWithoutFolder);
-
-      return activeImages;
-    } catch (error) {
-      console.error('Error parsing folder data:', error);
-      return uploadedImages;
-    }
-  };
-
-  // Check if an item should be visible based on folder visibility settings
-  const isItemVisible = (item: UploadedImage) => {
-    // If no folder name, show the item (backward compatibility)
-    if (!item.folderName) return true;
     
-    // Load folder data from localStorage
-    const savedFolderData = localStorage.getItem('virtualStoreFolders');
-    if (!savedFolderData) return true;
-    
-    try {
-      const folderData = JSON.parse(savedFolderData);
-      const folder = folderData.folders?.find((f: Folder) => f.name === item.folderName);
-      
-      if (!folder) return true;
-      
-      // Find the specific image in the folder and check if it's visible
-      const folderImage = folder.images.find((img: FolderImage) => img.src === item.src);
-      return folderImage ? folderImage.visible : true;
-    } catch {
-      return true; // If there's an error parsing, show the item
+    // If no current scene, return empty array
+    if (!currentScene) {
+      return [];
     }
+
+    const activeImages: UploadedImage[] = [];
+
+    // Group uploaded images by folder
+    const imagesByFolder: { [key: string]: UploadedImage[] } = {};
+    const imagesWithoutFolder: UploadedImage[] = [];
+
+    sceneImages.forEach(item => {
+      if (item.folderName) {
+        if (!imagesByFolder[item.folderName]) {
+          imagesByFolder[item.folderName] = [];
+        }
+        imagesByFolder[item.folderName].push(item);
+      } else {
+        imagesWithoutFolder.push(item);
+      }
+    });
+
+    // For each folder in the current scene, find and add only the active image
+    currentScene.folders.forEach((folder: Folder) => {
+      const folderImages = imagesByFolder[folder.name];
+      if (folderImages && folderImages.length > 0) {
+        // Find the active image in the folder
+        const activeImageInFolder = folder.images.find((img: FolderImage) => img.visible);
+        if (activeImageInFolder) {
+          // Find the corresponding uploaded image
+          const activeUploadedImage = folderImages.find(item => item.src === activeImageInFolder.src);
+          if (activeUploadedImage) {
+            activeImages.push(activeUploadedImage);
+          }
+        }
+      }
+    });
+
+    // Add images without folder names (backward compatibility)
+    activeImages.push(...imagesWithoutFolder);
+
+    return activeImages;
   };
 
   // Handle hot-spot click
   const handleHotSpotClick = (item: UploadedImage) => {
     setSelectedItem(item);
     
-    // Load folder data from localStorage
-    const savedFolderData = localStorage.getItem('virtualStoreFolders');
-    if (savedFolderData && item.folderName) {
-      const folderData = JSON.parse(savedFolderData);
-      const folder = folderData.folders?.find((f: Folder) => f.name === item.folderName);
+    // Load folder data from current scene
+    if (currentScene && item.folderName) {
+      const folder = currentScene.folders.find((f: Folder) => f.name === item.folderName);
       
       if (folder) {
         // Convert ALL folder images to UploadedImage format for display (not just visible ones)
@@ -231,7 +253,8 @@ export default function Home() {
           height: img.height,
           x: 0,
           y: 0,
-          folderName: folder.name
+          folderName: folder.name,
+          sceneId: currentScene.id
         }));
         
         setFolderImages(folderImagesForDisplay);
@@ -256,33 +279,45 @@ export default function Home() {
 
   // Handle try-on functionality
   const handleTryOn = (imageToTryOn: UploadedImage) => {
-    if (!selectedItem) return;
+    if (!selectedItem || !currentScene) return;
 
-    // Update folder visibility settings
+    // Update folder visibility settings in the current scene
     if (imageToTryOn.folderName) {
-      const savedFolderData = localStorage.getItem('virtualStoreFolders');
-      if (savedFolderData) {
-        try {
-          const folderData = JSON.parse(savedFolderData);
-          const folderIndex = folderData.folders?.findIndex((f: Folder) => f.name === imageToTryOn.folderName);
-          
-          if (folderIndex !== -1) {
-            // Set all images in this folder to invisible
-            folderData.folders[folderIndex].images.forEach((img: FolderImage) => {
-              img.visible = false;
-            });
-            
-            // Set the selected image to visible
-            const imageIndex = folderData.folders[folderIndex].images.findIndex((img: FolderImage) => img.src === imageToTryOn.src);
-            if (imageIndex !== -1) {
-              folderData.folders[folderIndex].images[imageIndex].visible = true;
+      const folderIndex = currentScene.folders.findIndex((f: Folder) => f.name === imageToTryOn.folderName);
+      
+      if (folderIndex !== -1) {
+        // Create updated scene with folder visibility changes
+        const updatedScene = {
+          ...currentScene,
+          folders: currentScene.folders.map((folder, index) => {
+            if (index === folderIndex) {
+              return {
+                ...folder,
+                images: folder.images.map((img: FolderImage) => ({
+                  ...img,
+                  visible: img.src === imageToTryOn.src
+                }))
+              };
             }
-            
-            // Save updated folder data
-            localStorage.setItem('virtualStoreFolders', JSON.stringify(folderData));
+            return folder;
+          })
+        };
+
+        // Update the current scene state
+        setCurrentScene(updatedScene);
+
+        // Update scenes in localStorage
+        try {
+          const savedScenes = localStorage.getItem('virtualStoreScenes');
+          if (savedScenes) {
+            const scenes: Scene[] = JSON.parse(savedScenes);
+            const updatedScenes = scenes.map(scene => 
+              scene.id === currentScene.id ? updatedScene : scene
+            );
+            localStorage.setItem('virtualStoreScenes', JSON.stringify(updatedScenes));
           }
         } catch (error) {
-          console.error('Error updating folder visibility:', error);
+          console.error('Error updating scene data:', error);
         }
       }
     }
@@ -392,8 +427,8 @@ export default function Home() {
           style={{ width: imageDimensions.width }}
         >
           <Image
-            src="/living-room.jpg"
-            alt="Living Room - Swipe to explore"
+            src={backgroundImageSrc}
+            alt={currentScene ? `${currentScene.name} - Swipe to explore` : "Living Room - Swipe to explore"}
             width={Math.round(imageDimensions.width)}
             height={Math.round(imageDimensions.height)}
             className="w-full h-full object-cover select-none"
@@ -464,7 +499,7 @@ export default function Home() {
       {/* Design Studio link */}
       <div className="absolute top-4 right-4 flex flex-col space-y-2">
         <Link 
-          href="/design-studio"
+          href={currentScene ? `/design-studio?sceneId=${currentScene.id}` : "/design-studio"}
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
         >
           Design Studio

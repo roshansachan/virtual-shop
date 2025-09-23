@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Stage, Layer, Image as KonvaImage } from 'react-konva';
 import type Konva from 'konva';
 import useImage from 'use-image';
@@ -156,6 +157,9 @@ interface FolderData {
 }
 
 export default function DesignStudioPage() {
+  const searchParams = useSearchParams();
+  const sceneIdParam = searchParams.get('sceneId');
+  
   const [placedImages, setPlacedImages] = useState<PlacedImage[]>([]);
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [currentSceneId, setCurrentSceneId] = useState<string>('');
@@ -257,7 +261,13 @@ export default function DesignStudioPage() {
           folders: scene.folders || []
         }));
         setScenes(scenesWithFolders);
-        setCurrentSceneId(scenesWithFolders[0]?.id || '');
+        
+        // Set the current scene ID based on URL parameter or default to first scene
+        if (sceneIdParam && scenesWithFolders.find((scene: Scene) => scene.id === sceneIdParam)) {
+          setCurrentSceneId(sceneIdParam);
+        } else {
+          setCurrentSceneId(scenesWithFolders[0]?.id || '');
+        }
       } else {
         // No saved scenes - start with empty state
         setScenes([]);
@@ -286,7 +296,7 @@ export default function DesignStudioPage() {
     if (savedPlacedImages) {
       setPlacedImages(JSON.parse(savedPlacedImages));
     }
-  }, []);
+  }, [sceneIdParam]);
 
   // Save placed images to localStorage whenever they change
   useEffect(() => {
@@ -1528,7 +1538,7 @@ export default function DesignStudioPage() {
             </div>
             <div className="flex items-center space-x-4">
               <Link 
-                href="/"
+                href={`/?scene=${encodeURIComponent(getCurrentScene()?.name || '')}&sceneId=${currentSceneId}`}
                 className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-sm transition-colors"
               >
                 ← Mobile View
