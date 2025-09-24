@@ -121,6 +121,8 @@ interface FolderImage {
   height: number;
   visible: boolean;
   s3Key?: string; // For S3 deletion
+  x?: number; // X coordinate for placement
+  y?: number; // Y coordinate for placement
 }
 
 interface Folder {
@@ -236,64 +238,104 @@ function DesignStudioContent() {
     });
   }, []);
 
-  // Initialize default scene and load saved data
+  // Initialize scenes from filesystem
   useEffect(() => {
-    const initializeScenes = () => {
-      const savedScenes = localStorage.getItem('virtualStoreScenes');
-      if (savedScenes) {
-        const parsedScenes = JSON.parse(savedScenes);
-        // Ensure all scenes have the folders property for backward compatibility
-        const scenesWithFolders = parsedScenes.map((scene: any) => ({
-          ...scene,
-          folders: scene.folders || []
-        }));
-        setScenes(scenesWithFolders);
-        
-        // Set the current scene ID based on URL parameter or default to first scene
-        if (sceneIdParam && scenesWithFolders.find((scene: Scene) => scene.id === sceneIdParam)) {
-          setCurrentSceneId(sceneIdParam);
+    const initializeScenes = async () => {
+      try {
+        // Load scenes from filesystem
+        const response = await fetch('/api/scenes');
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success) {
+            const loadedScenes = result.data;
+            setScenes(loadedScenes);
+            
+            // Extract placed images from scene data (they're now consolidated)
+            const allPlacedImages: PlacedImage[] = [];
+            loadedScenes.forEach((scene: Scene) => {
+              scene.folders?.forEach(folder => {
+                folder.images.forEach(image => {
+                  if (image.x !== undefined && image.y !== undefined) {
+                    allPlacedImages.push({
+                      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                      imageId: image.id,
+                      folderName: folder.name,
+                      src: image.src,
+                      x: image.x,
+                      y: image.y,
+                      width: image.width,
+                      height: image.height,
+                      name: image.name,
+                      sceneId: scene.id,
+                    });
+                  }
+                });
+              });
+            });
+            setPlacedImages(allPlacedImages);
+            
+            // Set the current scene ID based on URL parameter or default to first scene
+            if (sceneIdParam && loadedScenes.find((scene: Scene) => scene.id === sceneIdParam)) {
+              setCurrentSceneId(sceneIdParam);
+            } else {
+              setCurrentSceneId(loadedScenes[0]?.id || '');
+            }
+          }
         } else {
-          setCurrentSceneId(scenesWithFolders[0]?.id || '');
+          console.error('Failed to load scenes from filesystem');
+          setScenes([]);
+          setCurrentSceneId('');
         }
-      } else {
-        // No saved scenes - start with empty state
+      } catch (error) {
+        console.error('Error initializing scenes:', error);
         setScenes([]);
         setCurrentSceneId('');
       }
     };
 
     initializeScenes();
-
-    const savedFolderData = localStorage.getItem('virtualStoreFolders');
-    if (savedFolderData) {
-      // Migration: If old folder data exists, move it to the default scene
-      const parsedFolderData = JSON.parse(savedFolderData);
-      if (parsedFolderData.folders && parsedFolderData.folders.length > 0) {
-        setScenes(prev => prev.map(scene => 
-          scene.id === 'default-scene' 
-            ? { ...scene, folders: parsedFolderData.folders }
-            : scene
-        ));
-        // Remove old folder data after migration
-        localStorage.removeItem('virtualStoreFolders');
-      }
-    }
-
-    const savedPlacedImages = localStorage.getItem('virtualStoreImages');
-    if (savedPlacedImages) {
-      setPlacedImages(JSON.parse(savedPlacedImages));
-    }
   }, [sceneIdParam]);
 
-  // Save placed images to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem('virtualStoreImages', JSON.stringify(placedImages));
-  }, [placedImages]);
-
-  // Save scenes to localStorage whenever they change (includes folders now)
-  useEffect(() => {
-    localStorage.setItem('virtualStoreScenes', JSON.stringify(scenes));
-  }, [scenes]);
+  // Manual save scene function
+  const saveScene = useCallback(async () => {
+    if (!currentSceneId || scenes.length === 0) return false;
+    
+    const currentScene = scenes.find(scene => scene.id === currentSceneId);
+    if (!currentScene) return false;
+    
+    try {
+      // Update scene with current placed image coordinates
+      const updatedScene = {
+        ...currentScene,
+        folders: currentScene.folders?.map(folder => ({
+          ...folder,
+          images: folder.images.map(image => {
+            // Find placed image coordinates for this image
+            const placedImage = placedImages.find(
+              pi => pi.imageId === image.id && pi.sceneId === currentSceneId
+            );
+            
+            return {
+              ...image,
+              x: placedImage?.x ?? image.x ?? 0,
+              y: placedImage?.y ?? image.y ?? 0
+            };
+          })
+        }))
+      };
+      
+      const response = await fetch(`/api/scenes/${currentSceneId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedScene)
+      });
+      
+      return response.ok;
+    } catch (error) {
+      console.error('Failed to save scene:', error);
+      return false;
+    }
+  }, [currentSceneId, scenes, placedImages]);
 
   // Create new folder
   const createFolder = useCallback(() => {
@@ -421,6 +463,54 @@ function DesignStudioContent() {
     );
   }, []);
 
+  // Handle image dimensions loading for placed images
+  const handlePlacedImageLoad = useCallback((imageId: string, dimensions: { width: number; height: number }) => {
+    // Update the image dimensions in the scene's folder data only if they've changed
+    setScenes(prev => {
+      const currentScene = prev.find(scene => scene.id === currentSceneId);
+      const needsUpdate = currentScene?.folders?.some(folder => 
+        folder.images.some(image => 
+          image.id === imageId && (image.width !== dimensions.width || image.height !== dimensions.height)
+        )
+      );
+
+      if (!needsUpdate) return prev; // Return the same reference to prevent unnecessary re-renders
+
+      return prev.map(scene => 
+        scene.id === currentSceneId 
+          ? {
+              ...scene,
+              folders: scene.folders.map(folder => ({
+                ...folder,
+                images: folder.images.map(image => 
+                  image.id === imageId 
+                    ? { ...image, width: dimensions.width, height: dimensions.height }
+                    : image
+                )
+              }))
+            }
+          : scene
+      );
+    });
+
+    // Also update the placed images with correct dimensions
+    setPlacedImages(prev => {
+      const needsUpdate = prev.some(img => 
+        img.imageId === imageId && 
+        img.sceneId === currentSceneId && 
+        (img.width !== dimensions.width || img.height !== dimensions.height)
+      );
+
+      if (!needsUpdate) return prev; // Return the same reference to prevent unnecessary re-renders
+
+      return prev.map(img => 
+        img.imageId === imageId && img.sceneId === currentSceneId
+          ? { ...img, width: dimensions.width, height: dimensions.height }
+          : img
+      );
+    });
+  }, [currentSceneId]);
+
   // Remove placed image from canvas
   const removePlacedImage = useCallback((id: string) => {
     setPlacedImages(prev => prev.filter(img => img.id !== id));
@@ -438,88 +528,48 @@ function DesignStudioContent() {
   }, [stageSize]);
 
   // Get position of existing placed image from same folder
-  const getExistingFolderImagePosition = useCallback((folderName: string) => {
-    const existingImage = placedImages.find(img => img.folderName === folderName);
+  const getExistingFolderImagePosition = useCallback((folderName: string, currentPlacedImages: PlacedImage[]) => {
+    const existingImage = currentPlacedImages.find(img => img.folderName === folderName);
     return existingImage ? { x: existingImage.x, y: existingImage.y } : null;
-  }, [placedImages]);
-
-  // Auto-place image when it becomes visible
-  const autoPlaceImage = useCallback((folderId: string, imageId: string) => {
-    console.log('autoPlaceImage called:', { folderId, imageId });
-    const currentFolders = getCurrentSceneFolders();
-    const folder = currentFolders.find(f => f.id === folderId);
-    const image = folder?.images.find(img => img.id === imageId);
-    
-    console.log('Found folder:', folder);
-    console.log('Found image:', image);
-    
-    if (folder && image && image.visible && folder.visible) {
-      // Check if this image is already placed
-      const alreadyPlaced = placedImages.some(img => img.imageId === imageId && img.sceneId === currentSceneId);
-      console.log('Already placed:', alreadyPlaced);
-      if (alreadyPlaced) return;
-
-      // Get position - either from existing folder image or viewport center
-      const existingPosition = getExistingFolderImagePosition(folder.name);
-      const position = existingPosition || getViewportCenter();
-      console.log('Position:', position);
-      
-      const newPlacedImage: PlacedImage = {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-        imageId: image.id,
-        folderName: folder.name,
-        src: image.src,
-        x: position.x,
-        y: position.y,
-        width: image.width,
-        height: image.height,
-        name: image.name,
-        sceneId: currentSceneId,
-      };
-      console.log('Creating placed image:', newPlacedImage);
-      setPlacedImages(prev => [...prev, newPlacedImage]);
-    } else {
-      console.log('Conditions not met:', {
-        hasFolder: !!folder,
-        hasImage: !!image,
-        imageVisible: image?.visible,
-        folderVisible: folder?.visible
-      });
-    }
-  }, [getCurrentSceneFolders, placedImages, getExistingFolderImagePosition, getViewportCenter, currentSceneId]);
+  }, []);
 
   // Auto-place visible images that aren't placed yet
   useEffect(() => {
     const currentFolders = getCurrentSceneFolders();
+    
     currentFolders.forEach(folder => {
       if (folder.visible) {
         folder.images.forEach(image => {
           if (image.visible) {
-            const alreadyPlaced = placedImages.some(img => img.imageId === image.id && img.sceneId === currentSceneId);
-            if (!alreadyPlaced) {
-              // Get position - either from existing folder image or viewport center
-              const existingPosition = getExistingFolderImagePosition(folder.name);
-              const position = existingPosition || getViewportCenter();
-              
-              const newPlacedImage: PlacedImage = {
-                id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-                imageId: image.id,
-                folderName: folder.name,
-                src: image.src,
-                x: position.x,
-                y: position.y,
-                width: image.width,
-                height: image.height,
-                name: image.name,
-                sceneId: currentSceneId,
-              };
-              setPlacedImages(prev => [...prev, newPlacedImage]);
-            }
+            // Use functional setState to get current placedImages value
+            setPlacedImages(currentPlacedImages => {
+              const alreadyPlaced = currentPlacedImages.some(img => img.imageId === image.id && img.sceneId === currentSceneId);
+              if (!alreadyPlaced) {
+                // Get position - either from existing folder image or viewport center
+                const existingPosition = getExistingFolderImagePosition(folder.name, currentPlacedImages);
+                const position = existingPosition || getViewportCenter();
+                
+                const newPlacedImage: PlacedImage = {
+                  id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                  imageId: image.id,
+                  folderName: folder.name,
+                  src: image.src,
+                  x: position.x,
+                  y: position.y,
+                  width: image.width,
+                  height: image.height,
+                  name: image.name,
+                  sceneId: currentSceneId,
+                };
+                return [...currentPlacedImages, newPlacedImage];
+              }
+              return currentPlacedImages;
+            });
           }
         });
       }
     });
-  }, [getCurrentSceneFolders, placedImages, getExistingFolderImagePosition, getViewportCenter, currentSceneId]);
+  }, [getCurrentSceneFolders, getExistingFolderImagePosition, getViewportCenter, currentSceneId]);
 
   // Handle file upload to selected folder
   const handleFiles = useCallback(async (files: FileList) => {
@@ -613,6 +663,7 @@ function DesignStudioContent() {
           // Remove from uploading state
           setUploadingImages(prev => prev.filter(id => id !== uploadId));
           setUploadProgress(prev => {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { [uploadId]: removed, ...rest } = prev;
             return rest;
           });
@@ -622,6 +673,7 @@ function DesignStudioContent() {
           console.error('Failed to load uploaded image');
           setUploadingImages(prev => prev.filter(id => id !== uploadId));
           setUploadProgress(prev => {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { [uploadId]: removed, ...rest } = prev;
             return rest;
           });
@@ -636,6 +688,7 @@ function DesignStudioContent() {
         // Remove from uploading state
         setUploadingImages(prev => prev.filter(id => id !== uploadId));
         setUploadProgress(prev => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { [uploadId]: removed, ...rest } = prev;
           return rest;
         });
@@ -912,29 +965,50 @@ function DesignStudioContent() {
   }, [currentSceneId]);
 
   // Create new scene
-  const createScene = useCallback(() => {
+  const createScene = useCallback(async () => {
     if (newSceneName.trim() && newSceneImage) {
-      // Use the existing asset S3 key if available, otherwise use the uploaded image S3 key
-      const s3Key = newSceneImageS3Key || (window as any).tempSceneImageS3Key;
-      
-      const newScene: Scene = {
-        id: Date.now().toString(),
-        name: newSceneName.trim(),
-        backgroundImage: newSceneImage,
-        backgroundImageSize: { width: 1920, height: 1080 },
-        folders: [],
-        backgroundImageS3Key: s3Key
-      };
-      setScenes(prev => [...prev, newScene]);
-      setCurrentSceneId(newScene.id);
-      setNewSceneName('');
-      setNewSceneImage('');
-      setNewSceneImageS3Key('');
-      setShowCreateScene(false);
-      setShowSceneMenu(false);
-      
-      // Clear the temporary S3 key
-      delete (window as any).tempSceneImageS3Key;
+      try {
+        // Use the existing asset S3 key if available, otherwise use the uploaded image S3 key
+        const s3Key = newSceneImageS3Key || (window as any).tempSceneImageS3Key;
+        
+        const newScene: Scene = {
+          id: Date.now().toString(),
+          name: newSceneName.trim(),
+          backgroundImage: newSceneImage,
+          backgroundImageSize: { width: 1920, height: 1080 },
+          folders: [],
+          backgroundImageS3Key: s3Key
+        };
+        
+        // Create scene via API
+        const response = await fetch('/api/scenes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newScene)
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success) {
+            setScenes(prev => [...prev, newScene]);
+            setCurrentSceneId(newScene.id);
+            setNewSceneName('');
+            setNewSceneImage('');
+            setNewSceneImageS3Key('');
+            setShowCreateScene(false);
+            setShowSceneMenu(false);
+            
+            // Clear the temporary S3 key
+            delete (window as any).tempSceneImageS3Key;
+          }
+        } else {
+          console.error('Failed to create scene');
+          alert('Failed to create scene. Please try again.');
+        }
+      } catch (error) {
+        console.error('Error creating scene:', error);
+        alert('Error creating scene. Please try again.');
+      }
     }
   }, [newSceneName, newSceneImage, newSceneImageS3Key]);
 
@@ -1026,28 +1100,43 @@ function DesignStudioContent() {
     
     const scene = scenes.find(s => s.id === sceneId);
     if (scene && window.confirm(`Delete scene "${scene.name}"?`)) {
-      // Delete background image from S3 if it exists
-      if (scene.backgroundImageS3Key) {
-        try {
-          await fetch(`/api/delete-image?key=${encodeURIComponent(scene.backgroundImageS3Key)}`, {
-            method: 'DELETE',
-          });
-          console.log('Scene background image deleted from S3:', scene.backgroundImageS3Key);
-        } catch (error) {
-          console.error('Failed to delete scene background from S3:', error);
-          // Continue with scene deletion even if S3 deletion fails
+      try {
+        // Delete scene via API (this will also handle S3 cleanup if needed)
+        const response = await fetch(`/api/scenes/${sceneId}`, {
+          method: 'DELETE'
+        });
+        
+        if (response.ok) {
+          // Delete background image from S3 if it exists
+          if (scene.backgroundImageS3Key) {
+            try {
+              await fetch(`/api/delete-image?key=${encodeURIComponent(scene.backgroundImageS3Key)}`, {
+                method: 'DELETE',
+              });
+              console.log('Scene background image deleted from S3:', scene.backgroundImageS3Key);
+            } catch (error) {
+              console.error('Failed to delete scene background from S3:', error);
+              // Continue with scene deletion even if S3 deletion fails
+            }
+          }
+          
+          setScenes(prev => prev.filter(s => s.id !== sceneId));
+          
+          // Remove all placed images from this scene
+          setPlacedImages(prev => prev.filter(img => img.sceneId !== sceneId));
+          
+          // Switch to another scene if deleting current scene
+          if (currentSceneId === sceneId) {
+            const remainingScenes = scenes.filter(s => s.id !== sceneId);
+            setCurrentSceneId(remainingScenes[0]?.id || '');
+          }
+        } else {
+          console.error('Failed to delete scene');
+          alert('Failed to delete scene. Please try again.');
         }
-      }
-      
-      setScenes(prev => prev.filter(s => s.id !== sceneId));
-      
-      // Remove all placed images from this scene
-      setPlacedImages(prev => prev.filter(img => img.sceneId !== sceneId));
-      
-      // Switch to another scene if deleting current scene
-      if (currentSceneId === sceneId) {
-        const remainingScenes = scenes.filter(s => s.id !== sceneId);
-        setCurrentSceneId(remainingScenes[0]?.id || '');
+      } catch (error) {
+        console.error('Error deleting scene:', error);
+        alert('Error deleting scene. Please try again.');
       }
     }
   }, [scenes, currentSceneId]);
@@ -1538,6 +1627,25 @@ function DesignStudioContent() {
               </p>
             </div>
             <div className="flex items-center space-x-4">
+              <button
+                onClick={async () => {
+                  const success = await saveScene();
+                  if (success) {
+                    alert('Scene saved successfully!');
+                  } else {
+                    alert('Failed to save scene. Please try again.');
+                  }
+                }}
+                disabled={!currentSceneId}
+                className={`transition-colors px-4 py-2 rounded text-sm font-medium ${
+                  currentSceneId
+                    ? 'bg-green-600 hover:bg-green-700 text-white'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+                title={currentSceneId ? "Save current scene" : "No scene to save"}
+              >
+                💾 Save Scene
+              </button>
               <Link 
                 href={`/?scene=${encodeURIComponent(getCurrentScene()?.name || '')}&sceneId=${currentSceneId}`}
                 className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-sm transition-colors"
@@ -1627,6 +1735,7 @@ function DesignStudioContent() {
                       y={img.y}
                       draggable={true}
                       onDragEnd={(x, y) => handleImageDragEnd(img.id, x, y)}
+                      onImageLoad={(dimensions) => handlePlacedImageLoad(img.imageId, dimensions)}
                     />
                   ))}
               </Layer>
