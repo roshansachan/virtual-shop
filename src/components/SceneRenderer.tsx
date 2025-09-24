@@ -114,9 +114,15 @@ export default function SceneRenderer({ sceneId, sceneIndex }: SceneRendererProp
     const scaleX = viewportWidth / bgWidth
     const scaleY = viewportHeight / bgHeight
 
-    // Use the smaller scale factor to ensure the image fits in the viewport
-    // But don't scale down below 1 to maintain quality
-    const scale = Math.max(1, Math.min(scaleX, scaleY))
+    // If background is larger than viewport in both dimensions, keep original size (scale = 1)
+    // This allows scrolling instead of scaling down
+    if (bgWidth > viewportWidth && bgHeight > viewportHeight) {
+      return 1
+    }
+
+    // If background is smaller than viewport, scale up to cover the viewport
+    // Use the larger scale factor to ensure the image covers the entire viewport
+    const scale = Math.max(scaleX, scaleY)
     
     return scale
   }
