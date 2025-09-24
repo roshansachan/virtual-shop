@@ -216,6 +216,7 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
 
     setScene(updatedScene)
     setSelectedFolder(updatedScene.folders.find(f => f.id === selectedFolder.id) || null)
+    closeDrawer()
   }
 
   /**
@@ -484,6 +485,7 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
                               ? 'bg-green-600 text-white hover:bg-green-700'
                               : 'bg-black text-white hover:bg-gray-800'
                           }`}
+                          disabled={image.visible}
                         >
                           {image.visible ? 'Currently Shown' : 'Try On'}
                         </button>
