@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { Stage, Layer, Image as KonvaImage } from 'react-konva';
 import type Konva from 'konva';
 import useImage from 'use-image';
+import AssetManager from '@/components/AssetManager';
 
 // Custom hook for loading images with better CORS handling
 const useImageLoader = (src: string | null): [HTMLImageElement | undefined, 'loading' | 'loaded' | 'failed'] => {
@@ -175,10 +176,13 @@ function DesignStudioContent() {
   const [showCreateScene, setShowCreateScene] = useState(false);
   const [newSceneName, setNewSceneName] = useState('');
   const [newSceneImage, setNewSceneImage] = useState('');
+  const [newSceneImageS3Key, setNewSceneImageS3Key] = useState('');
   const [uploadingImages, setUploadingImages] = useState<string[]>([]);
   const [uploadProgress, setUploadProgress] = useState<{[key: string]: number}>({});
   const [uploadingSceneImage, setUploadingSceneImage] = useState(false);
   const [sceneImageUploadProgress, setSceneImageUploadProgress] = useState(0);
+  const [showAssetManager, setShowAssetManager] = useState(false);
+  const [showSceneAssetManager, setShowSceneAssetManager] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sceneImageInputRef = useRef<HTMLInputElement>(null);
@@ -206,23 +210,6 @@ function DesignStudioContent() {
     window.addEventListener('resize', updateStageSize);
     return () => window.removeEventListener('resize', updateStageSize);
   }, [sidebarCollapsed]);
-
-  // Close scene menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (showSceneMenu && !(event.target as Element).closest('.scene-menu-container')) {
-        setShowSceneMenu(false);
-        setShowCreateScene(false);
-        setNewSceneName('');
-        setNewSceneImage('');
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showSceneMenu]);
 
   // Get current scene
   const getCurrentScene = useCallback(() => {
@@ -819,6 +806,66 @@ function DesignStudioContent() {
     }
   }, []);
 
+  // Handle asset selection from Asset Manager for scene background
+  const handleSceneAssetSelect = useCallback((asset: { url: string; filename: string; key: string }) => {
+    // Set the selected asset as the new scene background
+    setNewSceneImage(asset.url);
+    // Store the S3 key for potential deletion later
+    setNewSceneImageS3Key(asset.key);
+    // Close the scene asset manager
+    setShowSceneAssetManager(false);
+  }, []);
+
+  // Handle asset selection from Asset Manager for folder images
+  const handleAssetSelect = useCallback((asset: { url: string; filename: string; key: string }) => {
+    const currentFolders = getCurrentSceneFolders();
+    
+    // If no folder is selected, show an alert
+    if (!selectedFolder) {
+      alert('Please select a folder first before adding assets.');
+      return;
+    }
+    
+    // Find the selected folder
+    const targetFolder = currentFolders.find(f => f.id === selectedFolder);
+    if (!targetFolder) {
+      alert('Selected folder not found. Please select a valid folder.');
+      return;
+    }
+    
+    // Add the asset as an image to the selected folder
+    const imageId = `img-${Date.now()}`;
+    setScenes(prev => prev.map(scene =>
+      scene.id === currentSceneId
+        ? {
+            ...scene,
+            folders: (scene.folders || []).map(folder =>
+              folder.id === selectedFolder
+                ? {
+                    ...folder,
+                    images: [
+                      ...folder.images.map(image => ({ ...image, visible: false })), // Hide other images
+                      {
+                        id: imageId,
+                        name: asset.filename,
+                        src: asset.url,
+                        s3Key: asset.key,
+                        visible: true,
+                        width: 100, // Default dimensions - will be updated when image loads
+                        height: 100
+                      }
+                    ]
+                  }
+                : folder
+            )
+          }
+        : scene
+    ));
+    
+    // Close the asset manager
+    setShowAssetManager(false);
+  }, [currentSceneId, getCurrentSceneFolders, selectedFolder]);
+
   // Handle stage drag bounds
   const handleStageDragBound = useCallback((pos: { x: number; y: number }) => {
     if (backgroundImageSize.width === 0 || backgroundImageSize.height === 0) {
@@ -867,7 +914,9 @@ function DesignStudioContent() {
   // Create new scene
   const createScene = useCallback(() => {
     if (newSceneName.trim() && newSceneImage) {
-      const s3Key = (window as any).tempSceneImageS3Key;
+      // Use the existing asset S3 key if available, otherwise use the uploaded image S3 key
+      const s3Key = newSceneImageS3Key || (window as any).tempSceneImageS3Key;
+      
       const newScene: Scene = {
         id: Date.now().toString(),
         name: newSceneName.trim(),
@@ -880,13 +929,14 @@ function DesignStudioContent() {
       setCurrentSceneId(newScene.id);
       setNewSceneName('');
       setNewSceneImage('');
+      setNewSceneImageS3Key('');
       setShowCreateScene(false);
       setShowSceneMenu(false);
       
       // Clear the temporary S3 key
       delete (window as any).tempSceneImageS3Key;
     }
-  }, [newSceneName, newSceneImage]);
+  }, [newSceneName, newSceneImage, newSceneImageS3Key]);
 
   // Handle scene background image upload
   const handleSceneImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1024,144 +1074,81 @@ function DesignStudioContent() {
                   </button>
                   {showSceneMenu && (
                     <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[280px]">
-                      <div className="p-3">
-                        {!showCreateScene ? (
-                          <>
-                            <div className="text-xs font-medium text-gray-500 mb-3">Scene Management</div>
-                            
-                            {/* Existing Scenes List */}
-                            <div className="space-y-1 mb-3">
-                              <div className="text-xs text-gray-500 mb-2">Switch Scene ({scenes.length})</div>
-                              {scenes.map((scene) => (
-                                <div key={scene.id} className="flex items-center justify-between group">
-                                  <button
-                                    onClick={() => {
-                                      setCurrentSceneId(scene.id);
-                                      setShowSceneMenu(false);
-                                    }}
-                                    className={`flex-1 text-left px-2 py-2 rounded text-sm flex items-center space-x-2 ${
-                                      scene.id === currentSceneId
-                                        ? 'bg-blue-100 text-blue-900'
-                                        : 'hover:bg-gray-100'
-                                    }`}
-                                  >
-                                    <div className="w-6 h-6 rounded border border-gray-300 overflow-hidden flex-shrink-0">
-                                      <img 
-                                        src={scene.backgroundImage} 
-                                        alt={scene.name}
-                                        className="w-full h-full object-cover"
-                                      />
-                                    </div>
-                                    <span className="truncate">{scene.name}</span>
-                                    {scene.id === currentSceneId && <span className="text-blue-500">✓</span>}
-                                  </button>
-                                  {scenes.length > 1 && (
-                                    <button
-                                      onClick={() => deleteScene(scene.id)}
-                                      className="opacity-0 group-hover:opacity-100 text-red-600 hover:text-red-800 p-1 ml-1"
-                                      title="Delete scene"
-                                    >
-                                      🗑️
-                                    </button>
-                                  )}
+                      <div className="p-3 relative">
+                        {/* Close Button */}
+                        <button
+                          onClick={() => setShowSceneMenu(false)}
+                          className="absolute top-2 right-2 p-1 rounded-full hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-700"
+                          title="Close menu"
+                        >
+                          ✕
+                        </button>
+                        <div className="text-xs font-medium text-gray-500 mb-3">Scene Management</div>
+                        
+                        {/* Existing Scenes List */}
+                        <div className="space-y-1 mb-3">
+                          <div className="text-xs text-gray-500 mb-2">Switch Scene ({scenes.length})</div>
+                          {scenes.map((scene) => (
+                            <div key={scene.id} className="flex items-center justify-between group">
+                              <button
+                                onClick={() => {
+                                  setCurrentSceneId(scene.id);
+                                  setShowSceneMenu(false);
+                                }}
+                                className={`flex-1 text-left px-2 py-2 rounded text-sm flex items-center space-x-2 ${
+                                  scene.id === currentSceneId
+                                    ? 'bg-blue-100 text-blue-900'
+                                    : 'hover:bg-gray-100'
+                                }`}
+                              >
+                                <div className="w-6 h-6 rounded border border-gray-300 overflow-hidden flex-shrink-0">
+                                  <img 
+                                    src={scene.backgroundImage} 
+                                    alt={scene.name}
+                                    className="w-full h-full object-cover"
+                                  />
                                 </div>
-                              ))}
-                            </div>
-                            
-                            <hr className="my-3" />
-                            
-                            {/* Create New Scene Button */}
-                            <button
-                              onClick={() => setShowCreateScene(true)}
-                              className="w-full text-left px-2 py-2 rounded text-sm hover:bg-green-50 text-green-600 font-medium flex items-center space-x-2"
-                            >
-                              <span>+</span>
-                              <span>Create New Scene</span>
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            {/* Create Scene Form */}
-                            <div className="text-xs font-medium text-gray-500 mb-3">Create New Scene</div>
-                            
-                            <div className="space-y-3">
-                              <div>
-                                <label className="block text-xs text-gray-600 mb-1">Scene Name</label>
-                                <input
-                                  type="text"
-                                  value={newSceneName}
-                                  onChange={(e) => setNewSceneName(e.target.value)}
-                                  placeholder="Enter scene name"
-                                  className="w-full px-2 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                  autoFocus
-                                />
-                              </div>
-                              
-                              <div>
-                                <label className="block text-xs text-gray-600 mb-1">Background Image</label>
-                                <div className="space-y-2">
-                                  <button
-                                    onClick={() => sceneImageInputRef.current?.click()}
-                                    disabled={uploadingSceneImage}
-                                    className={`w-full px-2 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 flex items-center justify-center space-x-2 ${
-                                      uploadingSceneImage ? 'opacity-50 cursor-not-allowed' : ''
-                                    }`}
-                                  >
-                                    <span>📤</span>
-                                    <span>{uploadingSceneImage ? 'Uploading...' : (newSceneImage ? 'Change Image' : 'Upload Image')}</span>
-                                  </button>
-                                  
-                                  {uploadingSceneImage && (
-                                    <div className="space-y-1">
-                                      <div className="w-full bg-blue-200 rounded-full h-2">
-                                        <div 
-                                          className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                                          style={{ width: `${sceneImageUploadProgress}%` }}
-                                        ></div>
-                                      </div>
-                                      <div className="text-xs text-blue-600 text-center">
-                                        Uploading scene background... {sceneImageUploadProgress}%
-                                      </div>
-                                    </div>
-                                  )}
-                                  
-                                  {newSceneImage && !uploadingSceneImage && (
-                                    <div className="flex items-center space-x-2">
-                                      <div className="w-8 h-8 rounded border border-gray-300 overflow-hidden">
-                                        <img 
-                                          src={newSceneImage} 
-                                          alt="Preview"
-                                          className="w-full h-full object-cover"
-                                        />
-                                      </div>
-                                      <span className="text-xs text-green-600">✓ Image selected</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                              
-                              <div className="flex space-x-2 pt-2">
+                                <span className="truncate">{scene.name}</span>
+                                {scene.id === currentSceneId && <span className="text-blue-500">✓</span>}
+                              </button>
+                              {scenes.length > 1 && (
                                 <button
-                                  onClick={createScene}
-                                  disabled={!newSceneName.trim() || !newSceneImage || uploadingSceneImage}
-                                  className="flex-1 bg-green-600 text-white py-2 px-3 rounded text-sm hover:bg-green-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                  onClick={() => deleteScene(scene.id)}
+                                  className="opacity-0 group-hover:opacity-100 text-red-600 hover:text-red-800 p-1 ml-1"
+                                  title="Delete scene"
                                 >
-                                  {uploadingSceneImage ? 'Uploading...' : 'Create Scene'}
+                                  🗑️
                                 </button>
-                                <button
-                                  onClick={() => {
-                                    setShowCreateScene(false);
-                                    setNewSceneName('');
-                                    setNewSceneImage('');
-                                  }}
-                                  className="flex-1 bg-gray-500 text-white py-2 px-3 rounded text-sm hover:bg-gray-600 transition-colors"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
+                              )}
                             </div>
-                          </>
-                        )}
+                          ))}
+                        </div>
+                        
+                        <hr className="my-3" />
+                        
+                        {/* Create New Scene Button */}
+                        <button
+                          onClick={() => {
+                            setShowCreateScene(true);
+                            setShowSceneMenu(false);
+                          }}
+                          className="w-full text-left px-2 py-2 rounded text-sm hover:bg-green-50 text-green-600 font-medium flex items-center space-x-2"
+                        >
+                          <span>+</span>
+                          <span>Create New Scene</span>
+                        </button>
+
+                        {/* Asset Manager Button */}
+                        <button
+                          onClick={() => {
+                            setShowAssetManager(true);
+                            setShowSceneMenu(false);
+                          }}
+                          className="w-full text-left px-2 py-2 rounded text-sm hover:bg-blue-50 text-blue-600 font-medium flex items-center space-x-2"
+                        >
+                          <span>📁</span>
+                          <span>Manage Assets</span>
+                        </button>
                       </div>
                     </div>
                   )}
@@ -1469,6 +1456,13 @@ function DesignStudioContent() {
                       <span>📤</span>
                       <span>Upload Images</span>
                     </button>
+                    <button
+                      onClick={() => setShowAssetManager(true)}
+                      className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center space-x-2"
+                    >
+                      <span>🖼️</span>
+                      <span>Manage Assets</span>
+                    </button>
                   </div>
                 ) : (
                   <div className="text-center text-gray-500 text-sm py-3">
@@ -1499,6 +1493,13 @@ function DesignStudioContent() {
                     📤
                   </div>
                 )}
+                <button
+                  onClick={() => setShowAssetManager(true)}
+                  className="w-full bg-purple-600 text-white p-3 rounded-lg hover:bg-purple-700 transition-colors"
+                  title="Manage Assets"
+                >
+                  🖼️
+                </button>
               </div>
             )}
           </div>
@@ -1680,6 +1681,152 @@ function DesignStudioContent() {
           )}
         </div>
       </div>
+
+      {/* Create Scene Modal */}
+      {showCreateScene && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Create New Scene</h2>
+                <button
+                  onClick={() => {
+                    setShowCreateScene(false);
+                    setNewSceneName('');
+                    setNewSceneImage('');
+                    setNewSceneImageS3Key('');
+                    setShowSceneMenu(false);
+                  }}
+                  className="p-1 rounded-full hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-700"
+                  title="Close modal"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm text-gray-700 mb-2">Scene Name</label>
+                  <input
+                    type="text"
+                    value={newSceneName}
+                    onChange={(e) => setNewSceneName(e.target.value)}
+                    placeholder="Enter scene name"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    autoFocus
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm text-gray-700 mb-2">Background Image</label>
+                  <div className="space-y-3">
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => sceneImageInputRef.current?.click()}
+                        disabled={uploadingSceneImage}
+                        className={`flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center justify-center space-x-2 ${
+                          uploadingSceneImage ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                      >
+                        <span>📤</span>
+                        <span>{uploadingSceneImage ? 'Uploading...' : 'Upload New'}</span>
+                      </button>
+                      <button
+                        onClick={() => setShowSceneAssetManager(true)}
+                        disabled={uploadingSceneImage}
+                        className={`flex-1 px-3 py-2 text-sm border border-purple-300 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 flex items-center justify-center space-x-2 ${
+                          uploadingSceneImage ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                      >
+                        <span>🖼️</span>
+                        <span>Use Existing</span>
+                      </button>
+                    </div>
+                    
+                    {uploadingSceneImage && (
+                      <div className="space-y-2">
+                        <div className="w-full bg-blue-200 rounded-full h-2">
+                          <div 
+                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${sceneImageUploadProgress}%` }}
+                          ></div>
+                        </div>
+                        <div className="text-xs text-blue-600 text-center">
+                          Uploading scene background... {sceneImageUploadProgress}%
+                        </div>
+                      </div>
+                    )}
+                    
+                    {newSceneImage && !uploadingSceneImage && (
+                      <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                        <div className="w-12 h-12 rounded border border-gray-300 overflow-hidden">
+                          <img 
+                            src={newSceneImage} 
+                            alt="Preview"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <span className="text-sm text-green-600 font-medium">✓ Image selected</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    onClick={createScene}
+                    disabled={!newSceneName.trim() || !newSceneImage || uploadingSceneImage}
+                    className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg text-sm hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  >
+                    {uploadingSceneImage ? 'Uploading...' : 'Create Scene'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowCreateScene(false);
+                      setNewSceneName('');
+                      setNewSceneImage('');
+                      setNewSceneImageS3Key('');
+                      setShowSceneMenu(false);
+                    }}
+                    className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg text-sm hover:bg-gray-600 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Asset Manager Modal */}
+      {showAssetManager && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl h-full max-h-[90vh] mx-4">
+            <AssetManager
+              onAssetSelect={handleAssetSelect}
+              onClose={() => setShowAssetManager(false)}
+              currentSceneId={currentSceneId}
+              selectedFolderName={selectedFolder ? getCurrentSceneFolders().find(f => f.id === selectedFolder)?.name : undefined}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Scene Background Asset Manager Modal */}
+      {showSceneAssetManager && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl h-full max-h-[90vh] mx-4">
+            <AssetManager
+              onAssetSelect={handleSceneAssetSelect}
+              onClose={() => setShowSceneAssetManager(false)}
+              currentSceneId={currentSceneId}
+              selectedFolderName="Scene Background (any image can be used)"
+              mode="select-background"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
