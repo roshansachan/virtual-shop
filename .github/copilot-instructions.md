@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Virtual Shop is a modern interactive design studio application built with Next.js 15 and TypeScript### Key Concepts
+Virtual Shop is a modern interactive design studio application built with Next.js 15 and TypeScript
 
 ### Scenes and Assets
 - **Scene**: A virtual environment with a background image and multiple asset folders
@@ -42,6 +42,7 @@ The project features an admin panel called **design-studio** where creators buil
 - Writes configuration files to `public/scenes/` directory
 - Provides accurate scene preview matching the final render for editing purposes
 - Should NOT handle final consumer-facing scene presentation
+- Should NOT use SceneRenderer component - has its own preview implementation
 
 **Scene Renderer (`/` route)**:
 - Consumer-facing interface that renders published scenes
@@ -49,6 +50,7 @@ The project features an admin panel called **design-studio** where creators buil
 - Displays interactive scenes with switchable folder images
 - Should NOT handle scene editing or configuration management
 - Focuses solely on presenting the final scene experience
+- Uses static site rendering to render scenes from JSON config
 
 **Key Principle**: Design Studio creates configs and provides editing previews, Scene Renderer consumes configs for final presentation. Scene preview and final render should always match to ensure consistency.
 
