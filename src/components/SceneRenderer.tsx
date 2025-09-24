@@ -45,9 +45,10 @@ interface SceneConfig {
 interface SceneRendererProps {
   sceneId?: string
   sceneIndex?: number
+  hideIndicators?: boolean
 }
 
-export default function SceneRenderer({ sceneId, sceneIndex }: SceneRendererProps) {
+export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = false }: SceneRendererProps) {
   const [scene, setScene] = useState<Scene | null>(null)
   const [scale, setScale] = useState(1)
   const [loading, setLoading] = useState(true)
@@ -404,7 +405,7 @@ export default function SceneRenderer({ sceneId, sceneIndex }: SceneRendererProp
                     e.currentTarget.style.display = 'none'
                   }}
                 />
-                {/* Only show hotspot if folder has multiple images */}
+                {/* Only show hotspot if folder has multiple images and indicators are not hidden */}
                 {folderWithImage && folderWithImage.images.length > 0 && 
                   createHotspot(image, folderWithImage)
                 }
@@ -415,17 +416,19 @@ export default function SceneRenderer({ sceneId, sceneIndex }: SceneRendererProp
       </div>
       
       {/* Scene info indicator */}
-      <div className="absolute top-4 left-4 bg-black/70 text-white px-3 py-2 rounded-lg text-sm">
-        <h2 className="font-medium">{scene.name}</h2>
-        {visibleImages.length > 0 && (
-          <p className="text-xs opacity-75 mt-1">
-            {visibleImages.length} item{visibleImages.length !== 1 ? 's' : ''} placed
-          </p>
-        )}
-      </div>
+      {!hideIndicators && (
+        <div className="absolute top-4 left-4 bg-black/70 text-white px-3 py-2 rounded-lg text-sm">
+          <h2 className="font-medium">{scene.name}</h2>
+          {visibleImages.length > 0 && (
+            <p className="text-xs opacity-75 mt-1">
+              {visibleImages.length} item{visibleImages.length !== 1 ? 's' : ''} placed
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Scroll indicator */}
-      {(scaledWidth > window.innerWidth || scaledHeight > window.innerHeight) && (
+      {!hideIndicators && (scaledWidth > window.innerWidth || scaledHeight > window.innerHeight) && (
         <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/70 text-white px-3 py-1 rounded-full text-xs flex items-center space-x-2">
           <span>Swipe to explore</span>
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
