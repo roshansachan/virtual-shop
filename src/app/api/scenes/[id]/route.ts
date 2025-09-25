@@ -42,9 +42,10 @@ interface SceneFile {
 // PUT - Update existing scene
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const params = await context.params;
     const sceneId = params.id;
     const sceneData: SceneFile = await request.json();
     
@@ -89,9 +90,10 @@ export async function PUT(
 // DELETE - Delete scene
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const params = await context.params;
     const sceneId = params.id;
     
     // Read current config
@@ -135,9 +137,10 @@ export async function DELETE(
 // GET - Get specific scene
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const params = await context.params;
     const sceneId = params.id;
     
     // Read current config
