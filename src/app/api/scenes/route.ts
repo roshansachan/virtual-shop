@@ -20,21 +20,27 @@ interface SceneFile {
   backgroundImage: string;
   backgroundImageSize: { width: number; height: number };
   backgroundImageS3Key?: string;
-  folders: Array<{
+  spaces: Array<{
     id: string;
     name: string;
     expanded: boolean;
     visible: boolean;
-    images: Array<{
+    placements: Array<{
       id: string;
       name: string;
-      src: string;
-      s3Key: string;
+      expanded: boolean;
       visible: boolean;
-      width: number;
-      height: number;
-      x: number;
-      y: number;
+      products: Array<{
+        id: string;
+        name: string;
+        src: string;
+        s3Key: string;
+        visible: boolean;
+        width: number;
+        height: number;
+        x: number;
+        y: number;
+      }>;
     }>;
   }>;
 }

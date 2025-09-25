@@ -20,7 +20,7 @@ interface LocalStorageScene {
   backgroundImage: string;
   backgroundImageSize: { width: number; height: number };
   backgroundImageS3Key?: string;
-  folders: Array<{
+  placements: Array<{
     id: string;
     name: string;
     expanded: boolean;
@@ -40,7 +40,7 @@ interface LocalStorageScene {
 interface PlacedImage {
   id: string;
   imageId: string;
-  folderName: string;
+  placementName: string;
   src: string;
   x: number;
   y: number;
@@ -56,7 +56,7 @@ interface SceneFile {
   backgroundImage: string;
   backgroundImageSize: { width: number; height: number };
   backgroundImageS3Key?: string;
-  folders: Array<{
+  placements: Array<{
     id: string;
     name: string;
     expanded: boolean;
@@ -105,9 +105,9 @@ export async function POST(request: NextRequest) {
         backgroundImage: scene.backgroundImage,
         backgroundImageSize: scene.backgroundImageSize,
         backgroundImageS3Key: scene.backgroundImageS3Key,
-        folders: scene.folders.map(folder => ({
-          ...folder,
-          images: folder.images.map(image => {
+        placements: scene.placements.map(placement => ({
+          ...placement,
+          images: placement.images.map(image => {
             // Find placed image coordinates for this image
             const placedImage = placedImages.find(
               pi => pi.imageId === image.id && pi.sceneId === scene.id

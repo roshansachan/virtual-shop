@@ -4,15 +4,21 @@ import { getS3Client, getAWSBucketName, generateSceneBackgroundS3Key, getS3Url }
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('Scene background upload API called');
+    
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const sceneId = formData.get('sceneId') as string;
 
+    console.log('Received file:', file?.name, 'Scene ID:', sceneId);
+
     if (!file) {
+      console.error('No file provided');
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
     if (!sceneId) {
+      console.error('Missing sceneId');
       return NextResponse.json({ error: 'Missing sceneId' }, { status: 400 });
     }
 
@@ -30,25 +36,29 @@ export async function POST(request: NextRequest) {
 
     // Generate S3 key for scene background
     const s3Key = generateSceneBackgroundS3Key(sceneId, file.name);
+    console.log('Generated S3 key:', s3Key);
 
     // Convert file to buffer
     const fileBuffer = Buffer.from(await file.arrayBuffer());
+    console.log('File buffer size:', fileBuffer.length);
 
     // Get S3 client and bucket name
     const s3Client = getS3Client();
     const bucketName = getAWSBucketName();
+    console.log('S3 bucket:', bucketName);
 
-    // Upload to S3
-    const uploadCommand = new PutObjectCommand({
+        // Upload to S3
+    const command = new PutObjectCommand({
       Bucket: bucketName,
       Key: s3Key,
       Body: fileBuffer,
       ContentType: file.type,
-      // Make file publicly accessible
-      ACL: 'public-read',
+      ACL: 'public-read', // Make the object publicly readable
     });
 
-    await s3Client.send(uploadCommand);
+    console.log('Uploading to S3 with command:', { Bucket: bucketName, Key: s3Key, ContentType: file.type, ACL: 'public-read' });
+    const result = await s3Client.send(command);
+    console.log('S3 upload result:', result);
 
     // Generate public URL
     const imageUrl = getS3Url(s3Key);

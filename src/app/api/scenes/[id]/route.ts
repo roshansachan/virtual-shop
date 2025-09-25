@@ -20,7 +20,7 @@ interface SceneFile {
   backgroundImage: string;
   backgroundImageSize: { width: number; height: number };
   backgroundImageS3Key?: string;
-  folders: Array<{
+  placements: Array<{
     id: string;
     name: string;
     expanded: boolean;

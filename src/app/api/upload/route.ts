@@ -9,17 +9,17 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const sceneId = formData.get('sceneId') as string;
-    const folderId = formData.get('folderId') as string;
+    const placementId = formData.get('placementId') as string;
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    if (!sceneId || !folderId) {
-      return NextResponse.json({ error: 'Missing sceneId or folderId' }, { status: 400 });
+    if (!sceneId || !placementId) {
+      return NextResponse.json({ error: 'Missing sceneId or placementId' }, { status: 400 });
     }
 
-    console.log('File received:', file.name, 'for scene:', sceneId, 'folder:', folderId);
+    console.log('File received:', file.name, 'for scene:', sceneId, 'placement:', placementId);
 
     // Validate file type
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate S3 key
-    const s3Key = generateS3Key(sceneId, folderId, file.name);
+    const s3Key = generateS3Key(sceneId, placementId, file.name);
     console.log('Generated S3 key:', s3Key);
 
     // Convert file to buffer

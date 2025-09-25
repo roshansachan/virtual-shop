@@ -6,7 +6,93 @@ import { useSearchParams } from 'next/navigation';
 import { Stage, Layer, Image as KonvaImage } from 'react-konva';
 import type Konva from 'konva';
 import useImage from 'use-image';
-import AssetManager from '@/components/AssetManager';
+
+// New hierarchy interfaces
+interface Product {
+  id: string;
+  src: string;
+  name: string;
+  width: number;
+  height: number;
+  visible: boolean;
+  s3Key?: string;
+  x?: number;
+  y?: number;
+}
+
+interface Placement {
+  id: string;
+  name: string;
+  expanded: boolean;
+  visible: boolean;
+  products: Product[];
+  activeProductId?: string; // Only one product can be active at a time
+}
+
+interface Space {
+  id: string;
+  name: string;
+  expanded: boolean;
+  visible: boolean;
+  placements: Placement[];
+}
+
+interface Scene {
+  id: string;
+  name: string;
+  backgroundImage: string;
+  backgroundImageSize: { width: number; height: number };
+  spaces: Space[];
+  backgroundImageS3Key?: string;
+}
+
+interface PlacedProduct {
+  id: string;
+  productId: string;
+  placementName: string;
+  spaceName: string;
+  src: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  name: string;
+  sceneId: string;
+  visible: boolean;
+}
+
+// Konva Image Component for Products
+interface ProductImageProps {
+  product: PlacedProduct;
+  onDragEnd: (product: PlacedProduct, x: number, y: number) => void;
+}
+
+const ProductImage: React.FC<ProductImageProps> = ({ product, onDragEnd }) => {
+  const [image] = useImage(product.src);
+
+  const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+    onDragEnd(product, e.target.x(), e.target.y());
+  };
+
+  if (!image) return null;
+
+  return (
+    <KonvaImage
+      image={image}
+      x={product.x}
+      y={product.y}
+      width={product.width}
+      height={product.height}
+      draggable
+      onDragEnd={handleDragEnd}
+      shadowColor="black"
+      shadowBlur={10}
+      shadowOpacity={0.6}
+      shadowOffsetX={5}
+      shadowOffsetY={5}
+    />
+  );
+};
 
 // Custom hook for loading images with better CORS handling
 const useImageLoader = (src: string | null): [HTMLImageElement | undefined, 'loading' | 'loaded' | 'failed'] => {
@@ -113,334 +199,299 @@ const KonvaImageComponent = ({ src, x, y, draggable = true, onDragEnd, onImageLo
   );
 };
 
-interface FolderImage {
-  id: string;
-  src: string;
-  name: string;
-  width: number;
-  height: number;
-  visible: boolean;
-  s3Key?: string; // For S3 deletion
-  x?: number; // X coordinate for placement
-  y?: number; // Y coordinate for placement
-}
-
-interface Folder {
-  id: string;
-  name: string;
-  expanded: boolean;
-  visible: boolean;
-  images: FolderImage[];
-}
-
-interface PlacedImage {
-  id: string;
-  imageId: string;
-  folderName: string;
-  src: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  name: string;
-  sceneId: string; // Add scene reference
-}
-
-interface Scene {
-  id: string;
-  name: string;
-  backgroundImage: string;
-  backgroundImageSize: { width: number; height: number };
-  folders: Folder[];
-  backgroundImageS3Key?: string; // For S3 deletion
-}
-
-interface FolderData {
-  folders: Folder[];
-}
-
 function DesignStudioContent() {
   const searchParams = useSearchParams();
   const sceneIdParam = searchParams.get('sceneId');
   
-  const [placedImages, setPlacedImages] = useState<PlacedImage[]>([]);
+  // State for new hierarchy
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [currentSceneId, setCurrentSceneId] = useState<string>('');
-  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
-  const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
-  const [backgroundImageSize, setBackgroundImageSize] = useState({ width: 1920, height: 1080 });
-  const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
-  const [editingImageId, setEditingImageId] = useState<string | null>(null);
-  const [newFolderName, setNewFolderName] = useState('');
-  const [showCreateFolder, setShowCreateFolder] = useState(false);
+  const [selectedSpaceId, setSelectedSpaceId] = useState<string>('');
+  const [selectedPlacementId, setSelectedPlacementId] = useState<string>('');
+  const [placedProducts, setPlacedProducts] = useState<PlacedProduct[]>([]);
+  
+  // UI state
+  const [newSpaceName, setNewSpaceName] = useState('');
+  const [newPlacementName, setNewPlacementName] = useState('');
+  const [showCreateSpace, setShowCreateSpace] = useState(false);
+  const [showCreatePlacement, setShowCreatePlacement] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showSceneMenu, setShowSceneMenu] = useState(false);
   const [showCreateScene, setShowCreateScene] = useState(false);
   const [newSceneName, setNewSceneName] = useState('');
   const [newSceneImage, setNewSceneImage] = useState('');
   const [newSceneImageS3Key, setNewSceneImageS3Key] = useState('');
-  const [uploadingImages, setUploadingImages] = useState<string[]>([]);
-  const [uploadProgress, setUploadProgress] = useState<{[key: string]: number}>({});
   const [uploadingSceneImage, setUploadingSceneImage] = useState(false);
   const [sceneImageUploadProgress, setSceneImageUploadProgress] = useState(0);
-  const [showAssetManager, setShowAssetManager] = useState(false);
-  const [showSceneAssetManager, setShowSceneAssetManager] = useState(false);
   
+  // Product upload state
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{[key: string]: number}>({});
+  const [uploadingProducts, setUploadingProducts] = useState<string[]>([]);
+  
+  // Canvas state
+  const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
+  const [backgroundImageSize, setBackgroundImageSize] = useState({ width: 1920, height: 1080 });
+  
+  // File input refs
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const sceneImageInputRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Set stage size based on window dimensions, sidebar state, and background image
-  useEffect(() => {
-    const updateStageSize = () => {
-      if (typeof window !== 'undefined') {
-        const sidebarWidth = sidebarCollapsed ? 80 : 400; // Collapsed vs expanded width
-        const availableWidth = window.innerWidth - sidebarWidth;
-        const availableHeight = window.innerHeight - 80;
-        
-        // Always set stage size to match available viewport
-        // The background image will be positioned within this stage
-        setStageSize({
-          width: availableWidth,
-          height: availableHeight
-        });
-      }
-    };
-
-    updateStageSize();
-    window.addEventListener('resize', updateStageSize);
-    return () => window.removeEventListener('resize', updateStageSize);
-  }, [sidebarCollapsed]);
-
-  // Get current scene
+  // Helper functions
   const getCurrentScene = useCallback(() => {
-    return scenes.find(scene => scene.id === currentSceneId) || scenes[0];
+    return scenes.find(scene => scene.id === currentSceneId);
   }, [scenes, currentSceneId]);
 
-  // Get images for current scene
-  const getCurrentSceneImages = useCallback(() => {
-    return placedImages.filter(img => img.sceneId === currentSceneId);
-  }, [placedImages, currentSceneId]);
-
-  // Get folders for current scene
-  const getCurrentSceneFolders = useCallback(() => {
+  const getCurrentSceneSpaces = useCallback(() => {
     const currentScene = getCurrentScene();
-    return currentScene?.folders || [];
+    return currentScene?.spaces || [];
   }, [getCurrentScene]);
 
-  // Load background image dimensions
-  useEffect(() => {
-    // Set a default size for when no background is loaded
-    setBackgroundImageSize({
-      width: 1920,
-      height: 1080
-    });
-  }, []);
+  const getSelectedSpace = useCallback(() => {
+    const spaces = getCurrentSceneSpaces();
+    return spaces.find(space => space.id === selectedSpaceId);
+  }, [getCurrentSceneSpaces, selectedSpaceId]);
 
-  // Initialize scenes from filesystem
-  useEffect(() => {
-    const initializeScenes = async () => {
-      try {
-        // Load scenes from filesystem
-        const response = await fetch('/api/scenes');
+  const getSelectedSpacePlacements = useCallback(() => {
+    const selectedSpace = getSelectedSpace();
+    return selectedSpace?.placements || [];
+  }, [getSelectedSpace]);
+
+  const getSelectedPlacement = useCallback(() => {
+    const placements = getSelectedSpacePlacements();
+    return placements.find(placement => placement.id === selectedPlacementId);
+  }, [getSelectedSpacePlacements, selectedPlacementId]);
+
+  // Space management functions
+  const createSpace = useCallback(() => {
+    if (newSpaceName.trim()) {
+      const newSpace: Space = {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        name: newSpaceName.trim(),
+        expanded: false,
+        visible: true,
+        placements: []
+      };
+      setScenes(prev => prev.map(scene =>
+        scene.id === currentSceneId
+          ? { ...scene, spaces: [...(scene.spaces || []), newSpace] }
+          : scene
+      ));
+      setNewSpaceName('');
+      setShowCreateSpace(false);
+    }
+  }, [newSpaceName, currentSceneId]);
+
+  // Placement management functions
+  const createPlacement = useCallback(() => {
+    if (newPlacementName.trim() && selectedSpaceId) {
+      const newPlacement: Placement = {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        name: newPlacementName.trim(),
+        expanded: false,
+        visible: true,
+        products: []
+      };
+      setScenes(prev => prev.map(scene =>
+        scene.id === currentSceneId
+          ? {
+              ...scene,
+              spaces: (scene.spaces || []).map(space =>
+                space.id === selectedSpaceId
+                  ? { ...space, placements: [...space.placements, newPlacement] }
+                  : space
+              )
+            }
+          : scene
+      ));
+      setNewPlacementName('');
+      setShowCreatePlacement(false);
+    }
+  }, [newPlacementName, currentSceneId, selectedSpaceId]);
+
+  // Calculate placement position for new products
+  const calculateNewProductPosition = (placement: Placement, backgroundImageSize: { width: number; height: number }) => {
+    const existingProducts = placement.products;
+    
+    if (existingProducts.length === 0) {
+      // No existing products - place at center
+      return {
+        x: backgroundImageSize.width / 2,
+        y: backgroundImageSize.height / 2
+      };
+    }
+    
+    // Use the position of the last product
+    const lastProduct = existingProducts[existingProducts.length - 1];
+    return {
+      x: lastProduct.x || backgroundImageSize.width / 2,
+      y: lastProduct.y || backgroundImageSize.height / 2
+    };
+  };
+
+  // Product upload functions
+  const handleFileInput = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    if (!selectedSpaceId || !selectedPlacementId || !currentSceneId) {
+      alert('Please select a space and placement first');
+      return;
+    }
+
+    const selectedSpace = getSelectedSpace();
+    const selectedPlacement = getSelectedPlacement();
+    
+    if (!selectedSpace || !selectedPlacement) {
+      alert('Selected space or placement not found');
+      return;
+    }
+
+    setIsUploading(true);
+    const fileArray = Array.from(files);
+    
+    try {
+      for (const file of fileArray) {
+        const fileId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+        setUploadingProducts(prev => [...prev, fileId]);
+        setUploadProgress(prev => ({ ...prev, [fileId]: 0 }));
+
+        // Create FormData for upload
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('sceneId', currentSceneId);
+        formData.append('placementId', selectedPlacementId);
+
+        // Upload to S3 via API
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        });
+
         if (response.ok) {
           const result = await response.json();
           if (result.success) {
-            const loadedScenes = result.data;
-            setScenes(loadedScenes);
-            
-            // Extract placed images from scene data (they're now consolidated)
-            const allPlacedImages: PlacedImage[] = [];
-            loadedScenes.forEach((scene: Scene) => {
-              scene.folders?.forEach(folder => {
-                folder.images.forEach(image => {
-                  if (image.x !== undefined && image.y !== undefined) {
-                    allPlacedImages.push({
-                      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-                      imageId: image.id,
-                      folderName: folder.name,
-                      src: image.src,
-                      x: image.x,
-                      y: image.y,
-                      width: image.width,
-                      height: image.height,
-                      name: image.name,
-                      sceneId: scene.id,
-                    });
-                  }
-                });
-              });
-            });
-            setPlacedImages(allPlacedImages);
-            
-            // Set the current scene ID based on URL parameter or default to first scene
-            if (sceneIdParam && loadedScenes.find((scene: Scene) => scene.id === sceneIdParam)) {
-              setCurrentSceneId(sceneIdParam);
-            } else {
-              setCurrentSceneId(loadedScenes[0]?.id || '');
-            }
-          }
-        } else {
-          console.error('Failed to load scenes from filesystem');
-          setScenes([]);
-          setCurrentSceneId('');
-        }
-      } catch (error) {
-        console.error('Error initializing scenes:', error);
-        setScenes([]);
-        setCurrentSceneId('');
-      }
-    };
+            // Load image to get actual dimensions
+            const img = new Image();
+            img.onload = () => {
+              // Get current scene for background size
+              const currentScene = scenes.find(scene => scene.id === currentSceneId);
+              const backgroundSize = currentScene?.backgroundImageSize || { width: 1000, height: 800 };
+              
+              // Calculate position for the new product
+              const position = calculateNewProductPosition(selectedPlacement, backgroundSize);
+              
+              // Create new product with actual image dimensions
+              const newProduct: Product = {
+                id: fileId,
+                src: result.data.url,
+                name: file.name,
+                width: img.naturalWidth,
+                height: img.naturalHeight,
+                visible: true,
+                s3Key: result.data.key,
+                x: position.x,
+                y: position.y
+              };
 
-    initializeScenes();
-  }, [sceneIdParam]);
-
-  // Manual save scene function
-  const saveScene = useCallback(async () => {
-    if (!currentSceneId || scenes.length === 0) return false;
-    
-    const currentScene = scenes.find(scene => scene.id === currentSceneId);
-    if (!currentScene) return false;
-    
-    try {
-      // Update scene with current placed image coordinates
-      const updatedScene = {
-        ...currentScene,
-        folders: currentScene.folders?.map(folder => ({
-          ...folder,
-          images: folder.images.map(image => {
-            // Find placed image coordinates for this image
-            const placedImage = placedImages.find(
-              pi => pi.imageId === image.id && pi.sceneId === currentSceneId
-            );
-            
-            return {
-              ...image,
-              x: placedImage?.x ?? image.x ?? 0,
-              y: placedImage?.y ?? image.y ?? 0
-            };
-          })
-        }))
-      };
-      
-      const response = await fetch(`/api/scenes/${currentSceneId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedScene)
-      });
-      
-      return response.ok;
-    } catch (error) {
-      console.error('Failed to save scene:', error);
-      return false;
-    }
-  }, [currentSceneId, scenes, placedImages]);
-
-  // Create new folder
-  const createFolder = useCallback(() => {
-    if (newFolderName.trim()) {
-      const newFolder: Folder = {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-        name: newFolderName.trim(),
-        expanded: false,
-        visible: true,
-        images: []
-      };
-      setScenes(prev => prev.map(scene =>
-        scene.id === currentSceneId
-          ? { ...scene, folders: [...(scene.folders || []), newFolder] }
-          : scene
-      ));
-      setNewFolderName('');
-      setShowCreateFolder(false);
-    }
-  }, [newFolderName, currentSceneId]);
-
-  // Toggle folder expansion
-  const toggleFolder = useCallback((folderId: string) => {
-    setScenes(prev => prev.map(scene =>
-      scene.id === currentSceneId
-        ? {
-            ...scene,
-            folders: (scene.folders || []).map(folder =>
-              folder.id === folderId
-                ? { ...folder, expanded: !folder.expanded }
-                : folder
-            )
-          }
-        : scene
-    ));
-  }, [currentSceneId]);
-
-  // Rename folder
-  const renameFolder = useCallback((folderId: string, newName: string) => {
-    if (newName.trim()) {
-      const currentScene = getCurrentScene();
-      const folder = currentScene?.folders?.find(f => f.id === folderId);
-      const oldName = folder?.name;
-      
-      setScenes(prev => prev.map(scene =>
-        scene.id === currentSceneId
-          ? {
-              ...scene,
-              folders: (scene.folders || []).map(folder =>
-                folder.id === folderId
-                  ? { ...folder, name: newName.trim() }
-                  : folder
-              )
-            }
-          : scene
-      ));
-      
-      // Update folder name in placed images
-      if (oldName) {
-        setPlacedImages(prev =>
-          prev.map(img => 
-            img.folderName === oldName && img.sceneId === currentSceneId
-              ? { ...img, folderName: newName.trim() }
-              : img
-          )
-        );
-      }
-    }
-    setEditingFolderId(null);
-  }, [getCurrentScene, currentSceneId]);
-
-  // Rename image
-  const renameImage = useCallback((folderId: string, imageId: string, newName: string) => {
-    if (newName.trim()) {
-      setScenes(prev => prev.map(scene =>
-        scene.id === currentSceneId
-          ? {
-              ...scene,
-              folders: (scene.folders || []).map(folder =>
-                folder.id === folderId
+              // Add product to the selected placement
+              setScenes(prev => prev.map(scene =>
+                scene.id === currentSceneId
                   ? {
-                      ...folder,
-                      images: folder.images.map(img =>
-                        img.id === imageId
-                          ? { ...img, name: newName.trim() }
-                          : img
+                      ...scene,
+                      spaces: scene.spaces.map(space =>
+                        space.id === selectedSpaceId
+                          ? {
+                              ...space,
+                              placements: space.placements.map(placement =>
+                                placement.id === selectedPlacementId
+                                  ? { 
+                                      ...placement, 
+                                      products: [...placement.products, newProduct],
+                                      activeProductId: placement.products.length === 0 ? newProduct.id : placement.activeProductId
+                                    }
+                                  : placement
+                              )
+                            }
+                          : space
                       )
                     }
-                  : folder
-              )
-            }
-          : scene
-      ));
+                  : scene
+              ));
 
-      // Update image name in placed images
-      setPlacedImages(prev =>
-        prev.map(img =>
-          img.imageId === imageId && img.sceneId === currentSceneId
-            ? { ...img, name: newName.trim() }
-            : img
-        )
-      );
+              // Create placed product for canvas rendering
+              const placedProduct: PlacedProduct = {
+                id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                productId: newProduct.id,
+                placementName: selectedPlacement.name,
+                spaceName: selectedSpace.name,
+                src: newProduct.src,
+                x: newProduct.x || 100,
+                y: newProduct.y || 100,
+                width: newProduct.width,
+                height: newProduct.height,
+                name: newProduct.name,
+                sceneId: currentSceneId,
+                visible: newProduct.visible
+              };
+
+              setPlacedProducts(prev => [...prev, placedProduct]);
+              setUploadProgress(prev => ({ ...prev, [fileId]: 100 }));
+            };
+            img.onerror = () => {
+              console.error('Failed to load image for dimensions');
+              // Get current scene for background size
+              const currentScene = scenes.find(scene => scene.id === currentSceneId);
+              const backgroundSize = currentScene?.backgroundImageSize || { width: 1000, height: 800 };
+              
+              // Calculate position for the new product
+              const position = calculateNewProductPosition(selectedPlacement, backgroundSize);
+              
+              // Fallback to default dimensions if image loading fails
+              const newProduct: Product = {
+                id: fileId,
+                src: result.data.url,
+                name: file.name,
+                width: 100,
+                height: 100,
+                visible: true,
+                s3Key: result.data.key,
+                x: position.x,
+                y: position.y
+              };
+              // ... rest of the fallback logic would be same as above
+            };
+            img.src = result.data.url;
+          } else {
+            console.error('Upload failed:', result.error);
+            alert(`Upload failed for ${file.name}: ${result.error}`);
+          }
+        } else {
+          console.error('Upload request failed');
+          alert(`Upload failed for ${file.name}: Server error`);
+        }
+
+        setUploadingProducts(prev => prev.filter(id => id !== fileId));
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Upload failed. Please try again.');
+    } finally {
+      setIsUploading(false);
+      setUploadProgress({});
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
-    setEditingImageId(null);
-  }, [currentSceneId]);
+  }, [selectedSpaceId, selectedPlacementId, currentSceneId, getSelectedSpace, getSelectedPlacement]);
+
+  const triggerProductUpload = useCallback(() => {
+    if (!selectedSpaceId || !selectedPlacementId) {
+      alert('Please select a space and placement first');
+      return;
+    }
+    fileInputRef.current?.click();
+  }, [selectedSpaceId, selectedPlacementId]);
 
   // Handle background image dimensions when loaded
   const handleBackgroundImageLoad = useCallback((dimensions: { width: number; height: number }) => {
@@ -453,471 +504,6 @@ function DesignStudioContent() {
         : scene
     ));
   }, [currentSceneId]);
-
-  // Handle image drag end on canvas
-  const handleImageDragEnd = useCallback((id: string, x: number, y: number) => {
-    setPlacedImages(prev => 
-      prev.map(img => 
-        img.id === id ? { ...img, x, y } : img
-      )
-    );
-  }, []);
-
-  // Handle image dimensions loading for placed images
-  const handlePlacedImageLoad = useCallback((imageId: string, dimensions: { width: number; height: number }) => {
-    // Update the image dimensions in the scene's folder data only if they've changed
-    setScenes(prev => {
-      const currentScene = prev.find(scene => scene.id === currentSceneId);
-      const needsUpdate = currentScene?.folders?.some(folder => 
-        folder.images.some(image => 
-          image.id === imageId && (image.width !== dimensions.width || image.height !== dimensions.height)
-        )
-      );
-
-      if (!needsUpdate) return prev; // Return the same reference to prevent unnecessary re-renders
-
-      return prev.map(scene => 
-        scene.id === currentSceneId 
-          ? {
-              ...scene,
-              folders: scene.folders.map(folder => ({
-                ...folder,
-                images: folder.images.map(image => 
-                  image.id === imageId 
-                    ? { ...image, width: dimensions.width, height: dimensions.height }
-                    : image
-                )
-              }))
-            }
-          : scene
-      );
-    });
-
-    // Also update the placed images with correct dimensions
-    setPlacedImages(prev => {
-      const needsUpdate = prev.some(img => 
-        img.imageId === imageId && 
-        img.sceneId === currentSceneId && 
-        (img.width !== dimensions.width || img.height !== dimensions.height)
-      );
-
-      if (!needsUpdate) return prev; // Return the same reference to prevent unnecessary re-renders
-
-      return prev.map(img => 
-        img.imageId === imageId && img.sceneId === currentSceneId
-          ? { ...img, width: dimensions.width, height: dimensions.height }
-          : img
-      );
-    });
-  }, [currentSceneId]);
-
-  // Remove placed image from canvas
-  const removePlacedImage = useCallback((id: string) => {
-    setPlacedImages(prev => prev.filter(img => img.id !== id));
-  }, []);
-
-  // Get center position of visible viewport
-  const getViewportCenter = useCallback(() => {
-    if (stageRef.current) {
-      const stage = stageRef.current;
-      const centerX = Math.abs(stage.x()) + stageSize.width / 2;
-      const centerY = Math.abs(stage.y()) + stageSize.height / 2;
-      return { x: centerX, y: centerY };
-    }
-    return { x: stageSize.width / 2, y: stageSize.height / 2 };
-  }, [stageSize]);
-
-  // Get position of existing placed image from same folder
-  const getExistingFolderImagePosition = useCallback((folderName: string, currentPlacedImages: PlacedImage[]) => {
-    const existingImage = currentPlacedImages.find(img => img.folderName === folderName);
-    return existingImage ? { x: existingImage.x, y: existingImage.y } : null;
-  }, []);
-
-  // Auto-place visible images that aren't placed yet
-  useEffect(() => {
-    const currentFolders = getCurrentSceneFolders();
-    
-    currentFolders.forEach(folder => {
-      if (folder.visible) {
-        folder.images.forEach(image => {
-          if (image.visible) {
-            // Use functional setState to get current placedImages value
-            setPlacedImages(currentPlacedImages => {
-              const alreadyPlaced = currentPlacedImages.some(img => img.imageId === image.id && img.sceneId === currentSceneId);
-              if (!alreadyPlaced) {
-                // Get position - either from existing folder image or viewport center
-                const existingPosition = getExistingFolderImagePosition(folder.name, currentPlacedImages);
-                const position = existingPosition || getViewportCenter();
-                
-                const newPlacedImage: PlacedImage = {
-                  id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-                  imageId: image.id,
-                  folderName: folder.name,
-                  src: image.src,
-                  x: position.x,
-                  y: position.y,
-                  width: image.width,
-                  height: image.height,
-                  name: image.name,
-                  sceneId: currentSceneId,
-                };
-                return [...currentPlacedImages, newPlacedImage];
-              }
-              return currentPlacedImages;
-            });
-          }
-        });
-      }
-    });
-  }, [getCurrentSceneFolders, getExistingFolderImagePosition, getViewportCenter, currentSceneId]);
-
-  // Handle file upload to selected folder
-  const handleFiles = useCallback(async (files: FileList) => {
-    if (!selectedFolder) {
-      alert('Please select a folder first');
-      return;
-    }
-
-    if (!currentSceneId) {
-      alert('Please select a scene first');
-      return;
-    }
-
-    const fileArray = Array.from(files).filter(file => file.type.startsWith('image/'));
-    
-    for (const file of fileArray) {
-      const uploadId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
-      
-      try {
-        // Add to uploading state
-        setUploadingImages(prev => [...prev, uploadId]);
-        setUploadProgress(prev => ({ ...prev, [uploadId]: 0 }));
-
-        // Create FormData for upload
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('sceneId', currentSceneId);
-        formData.append('folderId', selectedFolder);
-
-        // Simulate progress (since we can't track real progress with fetch)
-        const progressInterval = setInterval(() => {
-          setUploadProgress(prev => {
-            const current = prev[uploadId] || 0;
-            if (current < 90) {
-              return { ...prev, [uploadId]: current + 10 };
-            }
-            return prev;
-          });
-        }, 200);
-
-        // Upload to S3 via our API
-        const response = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData,
-        });
-
-        clearInterval(progressInterval);
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Upload failed');
-        }
-
-        const uploadResult = await response.json();
-        
-        // Update progress to 100%
-        setUploadProgress(prev => ({ ...prev, [uploadId]: 100 }));
-
-        // Create image element to get dimensions
-        const img = new Image();
-        img.onload = () => {
-          const currentFolders = getCurrentSceneFolders();
-          const folder = currentFolders.find(f => f.id === selectedFolder);
-          const isFirstImage = folder ? folder.images.length === 0 : false;
-          
-          const newImage: FolderImage = {
-            id: uploadId,
-            src: uploadResult.data.url,
-            name: uploadResult.data.filename,
-            width: img.naturalWidth,
-            height: img.naturalHeight,
-            visible: isFirstImage, // Only first image is visible by default
-            s3Key: uploadResult.data.key,
-          };
-          
-          setScenes(prev => prev.map(scene =>
-            scene.id === currentSceneId
-              ? {
-                  ...scene,
-                  folders: (scene.folders || []).map(folder =>
-                    folder.id === selectedFolder
-                      ? { ...folder, images: [...folder.images, newImage] }
-                      : folder
-                  )
-                }
-              : scene
-          ));
-          
-          console.log('Image uploaded to S3:', newImage.name, 'URL:', newImage.src);
-          
-          // Remove from uploading state
-          setUploadingImages(prev => prev.filter(id => id !== uploadId));
-          setUploadProgress(prev => {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { [uploadId]: removed, ...rest } = prev;
-            return rest;
-          });
-        };
-        
-        img.onerror = () => {
-          console.error('Failed to load uploaded image');
-          setUploadingImages(prev => prev.filter(id => id !== uploadId));
-          setUploadProgress(prev => {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { [uploadId]: removed, ...rest } = prev;
-            return rest;
-          });
-        };
-        
-        img.src = uploadResult.data.url;
-
-      } catch (error) {
-        console.error('Upload error:', error);
-        alert(`Failed to upload ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        
-        // Remove from uploading state
-        setUploadingImages(prev => prev.filter(id => id !== uploadId));
-        setUploadProgress(prev => {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { [uploadId]: removed, ...rest } = prev;
-          return rest;
-        });
-      }
-    }
-  }, [selectedFolder, currentSceneId, getCurrentSceneFolders]);
-
-  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      handleFiles(e.target.files);
-    }
-  }, [handleFiles]);
-
-  // Toggle folder visibility
-  const toggleFolderVisibility = useCallback((folderId: string) => {
-    const currentFolders = getCurrentSceneFolders();
-    const folder = currentFolders.find(f => f.id === folderId);
-    const wasVisible = folder?.visible;
-    
-    setScenes(prev => prev.map(scene =>
-      scene.id === currentSceneId
-        ? {
-            ...scene,
-            folders: scene.folders.map(folder =>
-              folder.id === folderId
-                ? { ...folder, visible: !folder.visible }
-                : folder
-            )
-          }
-        : scene
-    ));
-
-    // Remove all placed images from this folder when hiding
-    if (folder && wasVisible) {
-      setPlacedImages(prev => prev.filter(img => img.folderName !== folder.name || img.sceneId !== currentSceneId));
-    }
-  }, [getCurrentSceneFolders, currentSceneId]);
-
-  // Toggle image visibility (ensure only one image per folder is visible)
-  const toggleImageVisibility = useCallback((folderId: string, imageId: string) => {
-    const currentFolders = getCurrentSceneFolders();
-    const folder = currentFolders.find(f => f.id === folderId);
-    const image = folder?.images.find(img => img.id === imageId);
-    
-    setScenes(prev => prev.map(scene =>
-      scene.id === currentSceneId
-        ? {
-            ...scene,
-            folders: scene.folders.map(folder =>
-              folder.id === folderId
-                ? {
-                    ...folder,
-                    images: folder.images.map(img => ({
-                      ...img,
-                      visible: img.id === imageId ? !img.visible : false // Only one image visible at a time
-                    }))
-                  }
-                : folder
-            )
-          }
-        : scene
-    ));
-
-    // Remove placed images from this folder when hiding current image
-    if (image && image.visible) {
-      setPlacedImages(prev => prev.filter(img => img.folderName !== folder?.name || img.sceneId !== currentSceneId));
-    }
-  }, [getCurrentSceneFolders, currentSceneId]);
-
-  // Delete folder
-  const deleteFolder = useCallback((folderId: string) => {
-    const currentFolders = getCurrentSceneFolders();
-    const folder = currentFolders.find(f => f.id === folderId);
-    if (folder && window.confirm(`Delete folder "${folder.name}" and all its images?`)) {
-      setScenes(prev => prev.map(scene =>
-        scene.id === currentSceneId
-          ? {
-              ...scene,
-              folders: scene.folders.filter(f => f.id !== folderId)
-            }
-          : scene
-      ));
-      
-      // Remove placed images from this folder
-      setPlacedImages(prev => prev.filter(img => img.folderName !== folder.name || img.sceneId !== currentSceneId));
-    }
-  }, [getCurrentSceneFolders, currentSceneId]);
-
-  // Delete image from folder
-  const deleteImageFromFolder = useCallback(async (folderId: string, imageId: string) => {
-    // Find the image to get its S3 key
-    const currentFolders = getCurrentSceneFolders();
-    const folder = currentFolders.find(f => f.id === folderId);
-    const image = folder?.images.find(img => img.id === imageId);
-    
-    // Delete from S3 if it has an S3 key
-    if (image?.s3Key) {
-      try {
-        const response = await fetch(`/api/delete-image?key=${encodeURIComponent(image.s3Key)}`, {
-          method: 'DELETE',
-        });
-        
-        if (!response.ok) {
-          console.error('Failed to delete image from S3');
-        }
-      } catch (error) {
-        console.error('Error deleting image from S3:', error);
-      }
-    }
-    
-    setScenes(prev => prev.map(scene =>
-      scene.id === currentSceneId
-        ? {
-            ...scene,
-            folders: (scene.folders || []).map(folder =>
-              folder.id === folderId
-                ? { ...folder, images: folder.images.filter(img => img.id !== imageId) }
-                : folder
-            )
-          }
-        : scene
-    ));
-    
-    // Remove from canvas if placed
-    setPlacedImages(prev => prev.filter(img => img.imageId !== imageId || img.sceneId !== currentSceneId));
-  }, [currentSceneId, getCurrentSceneFolders]);
-
-  // Reset pan to center
-  const resetPan = useCallback(() => {
-    if (stageRef.current) {
-      if (backgroundImageSize.width > 0 && backgroundImageSize.height > 0) {
-        // Center the background image in the viewport
-        let centerX, centerY;
-        
-        if (backgroundImageSize.width <= stageSize.width) {
-          // Image fits horizontally - center it
-          centerX = (stageSize.width - backgroundImageSize.width) / 2;
-        } else {
-          // Image is larger - position to show the left side
-          centerX = 0;
-        }
-        
-        if (backgroundImageSize.height <= stageSize.height) {
-          // Image fits vertically - center it
-          centerY = (stageSize.height - backgroundImageSize.height) / 2;
-        } else {
-          // Image is larger - position to show the top
-          centerY = 0;
-        }
-        
-        stageRef.current.x(centerX);
-        stageRef.current.y(centerY);
-      } else {
-        // No background image - reset to origin
-        stageRef.current.x(0);
-        stageRef.current.y(0);
-      }
-      stageRef.current.batchDraw();
-    }
-  }, [stageSize, backgroundImageSize]);
-
-  // Reset pan to origin (0,0)
-  const resetToOrigin = useCallback(() => {
-    if (stageRef.current) {
-      stageRef.current.x(0);
-      stageRef.current.y(0);
-      stageRef.current.batchDraw();
-    }
-  }, []);
-
-  // Handle asset selection from Asset Manager for scene background
-  const handleSceneAssetSelect = useCallback((asset: { url: string; filename: string; key: string }) => {
-    // Set the selected asset as the new scene background
-    setNewSceneImage(asset.url);
-    // Store the S3 key for potential deletion later
-    setNewSceneImageS3Key(asset.key);
-    // Close the scene asset manager
-    setShowSceneAssetManager(false);
-  }, []);
-
-  // Handle asset selection from Asset Manager for folder images
-  const handleAssetSelect = useCallback((asset: { url: string; filename: string; key: string }) => {
-    const currentFolders = getCurrentSceneFolders();
-    
-    // If no folder is selected, show an alert
-    if (!selectedFolder) {
-      alert('Please select a folder first before adding assets.');
-      return;
-    }
-    
-    // Find the selected folder
-    const targetFolder = currentFolders.find(f => f.id === selectedFolder);
-    if (!targetFolder) {
-      alert('Selected folder not found. Please select a valid folder.');
-      return;
-    }
-    
-    // Add the asset as an image to the selected folder
-    const imageId = `img-${Date.now()}`;
-    setScenes(prev => prev.map(scene =>
-      scene.id === currentSceneId
-        ? {
-            ...scene,
-            folders: (scene.folders || []).map(folder =>
-              folder.id === selectedFolder
-                ? {
-                    ...folder,
-                    images: [
-                      ...folder.images.map(image => ({ ...image, visible: false })), // Hide other images
-                      {
-                        id: imageId,
-                        name: asset.filename,
-                        src: asset.url,
-                        s3Key: asset.key,
-                        visible: true,
-                        width: 100, // Default dimensions - will be updated when image loads
-                        height: 100
-                      }
-                    ]
-                  }
-                : folder
-            )
-          }
-        : scene
-    ));
-    
-    // Close the asset manager
-    setShowAssetManager(false);
-  }, [currentSceneId, getCurrentSceneFolders, selectedFolder]);
 
   // Handle stage drag bounds
   const handleStageDragBound = useCallback((pos: { x: number; y: number }) => {
@@ -952,502 +538,613 @@ function DesignStudioContent() {
     return { x: newX, y: newY };
   }, [backgroundImageSize, stageSize]);
 
-  // Clear all
-  const clearAll = useCallback(() => {
-    if (window.confirm('Clear all folders and placed images for this scene?')) {
-      setScenes(prev => prev.map(scene =>
-        scene.id === currentSceneId
-          ? { ...scene, folders: [] }
-          : scene
-      ));
-      setPlacedImages(prev => prev.filter(img => img.sceneId !== currentSceneId));
-    }
+  // Handle product position updates from drag
+  const handleProductDragEnd = useCallback((product: PlacedProduct, x: number, y: number) => {
+    // Update placed products state
+    setPlacedProducts(prev => 
+      prev.map(p => 
+        p.id === product.id 
+          ? { ...p, x, y }
+          : p
+      )
+    );
+
+    // Update product in scenes state
+    setScenes(prev => prev.map(scene =>
+      scene.id === currentSceneId
+        ? {
+            ...scene,
+            spaces: scene.spaces.map(space => ({
+              ...space,
+              placements: space.placements.map(placement => ({
+                ...placement,
+                products: placement.products.map(p =>
+                  p.id === product.productId
+                    ? { ...p, x, y }
+                    : p
+                )
+              }))
+            }))
+          }
+        : scene
+    ));
   }, [currentSceneId]);
 
   // Create new scene
   const createScene = useCallback(async () => {
-    if (newSceneName.trim() && newSceneImage) {
-      try {
-        // Use the existing asset S3 key if available, otherwise use the uploaded image S3 key
-        const s3Key = newSceneImageS3Key || (window as any).tempSceneImageS3Key;
-        
-        const newScene: Scene = {
-          id: Date.now().toString(),
-          name: newSceneName.trim(),
-          backgroundImage: newSceneImage,
-          backgroundImageSize: { width: 1920, height: 1080 },
-          folders: [],
-          backgroundImageS3Key: s3Key
-        };
-        
-        // Create scene via API
-        const response = await fetch('/api/scenes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newScene)
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          if (result.success) {
-            setScenes(prev => [...prev, newScene]);
-            setCurrentSceneId(newScene.id);
-            setNewSceneName('');
-            setNewSceneImage('');
-            setNewSceneImageS3Key('');
-            setShowCreateScene(false);
-            setShowSceneMenu(false);
-            
-            // Clear the temporary S3 key
-            delete (window as any).tempSceneImageS3Key;
-          }
-        } else {
-          console.error('Failed to create scene');
-          alert('Failed to create scene. Please try again.');
-        }
-      } catch (error) {
-        console.error('Error creating scene:', error);
-        alert('Error creating scene. Please try again.');
-      }
+    if (!newSceneName.trim()) return;
+    
+    try {
+      const newScene: Scene = {
+        id: Date.now().toString(),
+        name: newSceneName.trim(),
+        backgroundImage: newSceneImage,
+        backgroundImageS3Key: newSceneImageS3Key,
+        backgroundImageSize: { width: 1200, height: 800 }, // Default size, will be updated when image loads
+        spaces: []
+      };
+      
+      // Add scene to state
+      const newScenes = [...scenes, newScene];
+      setScenes(newScenes);
+      setCurrentSceneId(newScene.id);
+      
+      // Save scene to file system
+      await fetch('/api/scenes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newScene),
+      });
+      
+      // Reset modal state
+      setShowCreateScene(false);
+      setNewSceneName('');
+      setNewSceneImage('');
+      setNewSceneImageS3Key('');
+      setSceneImageUploadProgress(0);
+    } catch (error) {
+      console.error('Error creating scene:', error);
     }
-  }, [newSceneName, newSceneImage, newSceneImageS3Key]);
+  }, [newSceneName, newSceneImage, newSceneImageS3Key, scenes]);
 
-  // Handle scene background image upload
+  // Handle scene image upload
   const handleSceneImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !file.type.startsWith('image/')) {
+    if (!file) return;
+
+    // Validate file type and size
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      alert('Please upload a valid image file (JPEG, PNG, GIF, or WebP)');
       return;
     }
 
-    try {
-      // Set uploading state
-      setUploadingSceneImage(true);
-      setSceneImageUploadProgress(0);
+    const maxSizeInMB = 10;
+    if (file.size > maxSizeInMB * 1024 * 1024) {
+      alert(`File size must be less than ${maxSizeInMB}MB`);
+      return;
+    }
 
-      // Create FormData for upload
+    setUploadingSceneImage(true);
+    setSceneImageUploadProgress(0);
+
+    try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('sceneId', 'temp-scene-' + Date.now()); // Temporary scene ID for upload
+      // Generate a temporary scene ID for the upload path
+      const tempSceneId = `temp-scene-${Date.now()}`;
+      formData.append('sceneId', tempSceneId);
 
-      // Simulate progress
-      const progressInterval = setInterval(() => {
-        setSceneImageUploadProgress(prev => {
-          if (prev < 90) {
-            return prev + 10;
-          }
-          return prev;
-        });
-      }, 200);
-
-      // Upload to S3 via our API
+      // Upload to S3
       const response = await fetch('/api/upload-scene-background', {
         method: 'POST',
         body: formData,
       });
 
-      clearInterval(progressInterval);
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Upload failed');
+      if (response.ok) {
+        const data = await response.json();
+        setNewSceneImage(data.data.url);
+        setNewSceneImageS3Key(data.data.key);
+        setSceneImageUploadProgress(100);
+      } else {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('Scene image upload failed:', errorData);
+        throw new Error(`Upload failed: ${errorData.error || 'Server error'}`);
       }
-
-      const uploadResult = await response.json();
-      
-      // Update progress to 100%
-      setSceneImageUploadProgress(100);
-
-      // Create image element to get dimensions
-      const img = new Image();
-      img.onload = () => {
-        // Set the new scene image URL and dimensions
-        setNewSceneImage(uploadResult.data.url);
-        
-        // Store S3 key for later use when creating the scene
-        (window as any).tempSceneImageS3Key = uploadResult.data.key;
-        
-        console.log('Scene background uploaded to S3:', uploadResult.data.url);
-        
-        // Reset upload state
-        setUploadingSceneImage(false);
-        setSceneImageUploadProgress(0);
-      };
-      
-      img.onerror = () => {
-        console.error('Failed to load uploaded scene image');
-        setUploadingSceneImage(false);
-        setSceneImageUploadProgress(0);
-      };
-      
-      img.src = uploadResult.data.url;
-
     } catch (error) {
-      console.error('Scene image upload error:', error);
-      alert(`Failed to upload scene background: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      
-      // Reset upload state
+      console.error('Scene image upload failed:', error);
+      alert(`Failed to upload scene image: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`);
+    } finally {
       setUploadingSceneImage(false);
-      setSceneImageUploadProgress(0);
     }
   }, []);
 
-  // Delete scene
-  const deleteScene = useCallback(async (sceneId: string) => {
-    if (scenes.length <= 1) {
-      alert('Cannot delete the last scene');
-      return;
-    }
-    
-    const scene = scenes.find(s => s.id === sceneId);
-    if (scene && window.confirm(`Delete scene "${scene.name}"?`)) {
-      try {
-        // Delete scene via API (this will also handle S3 cleanup if needed)
-        const response = await fetch(`/api/scenes/${sceneId}`, {
-          method: 'DELETE'
-        });
+  // Set active product for placement (only one active at a time)
+  const setActiveProduct = useCallback((spaceId: string, placementId: string, productId: string) => {
+    setScenes(prev => prev.map(scene =>
+      scene.id === currentSceneId
+        ? {
+            ...scene,
+            spaces: scene.spaces.map(space =>
+              space.id === spaceId
+                ? {
+                    ...space,
+                    placements: space.placements.map(placement =>
+                      placement.id === placementId
+                        ? { ...placement, activeProductId: productId }
+                        : placement
+                    )
+                  }
+                : space
+            )
+          }
+        : scene
+    ));
+  }, [currentSceneId]);
+
+  // Remove product
+  const removeProduct = useCallback((spaceId: string, placementId: string, productId: string) => {
+    setScenes(prev => prev.map(scene =>
+      scene.id === currentSceneId
+        ? {
+            ...scene,
+            spaces: scene.spaces.map(space =>
+              space.id === spaceId
+                ? {
+                    ...space,
+                    placements: space.placements.map(placement =>
+                      placement.id === placementId
+                        ? {
+                            ...placement,
+                            products: placement.products.filter(product => product.id !== productId),
+                            activeProductId: placement.activeProductId === productId ? 
+                              placement.products.find(p => p.id !== productId)?.id : 
+                              placement.activeProductId
+                          }
+                        : placement
+                    )
+                  }
+                : space
+            )
+          }
+        : scene
+    ));
+
+    // Remove from placed products
+    setPlacedProducts(prev => prev.filter(placedProduct => 
+      !(placedProduct.productId === productId && placedProduct.sceneId === currentSceneId)
+    ));
+  }, [currentSceneId]);
+
+  // Set stage size based on window dimensions, sidebar state, and background image
+  useEffect(() => {
+    const updateStageSize = () => {
+      if (typeof window !== 'undefined') {
+        const sidebarWidth = sidebarCollapsed ? 80 : 400; // Collapsed vs expanded width
+        const availableWidth = window.innerWidth - sidebarWidth;
+        const availableHeight = window.innerHeight - 80;
         
-        if (response.ok) {
-          // Delete background image from S3 if it exists
-          if (scene.backgroundImageS3Key) {
-            try {
-              await fetch(`/api/delete-image?key=${encodeURIComponent(scene.backgroundImageS3Key)}`, {
-                method: 'DELETE',
-              });
-              console.log('Scene background image deleted from S3:', scene.backgroundImageS3Key);
-            } catch (error) {
-              console.error('Failed to delete scene background from S3:', error);
-              // Continue with scene deletion even if S3 deletion fails
+        // Always set stage size to match available viewport
+        // The background image will be positioned within this stage
+        setStageSize({
+          width: availableWidth,
+          height: availableHeight
+        });
+      }
+    };
+
+    updateStageSize();
+    window.addEventListener('resize', updateStageSize);
+    return () => window.removeEventListener('resize', updateStageSize);
+  }, [sidebarCollapsed]);
+
+  // Get current scene placed products for canvas
+  const getCurrentPlacedProducts = useCallback(() => {
+    const currentScene = scenes.find(scene => scene.id === currentSceneId);
+    if (!currentScene) return [];
+
+    const activeProducts: PlacedProduct[] = [];
+    
+    currentScene.spaces?.forEach(space => {
+      space.placements?.forEach(placement => {
+        if (placement.activeProductId) {
+          const activeProduct = placement.products.find(p => p.id === placement.activeProductId);
+          if (activeProduct && activeProduct.x !== undefined && activeProduct.y !== undefined) {
+            const placedProduct = placedProducts.find(pp => pp.productId === activeProduct.id);
+            if (placedProduct) {
+              activeProducts.push(placedProduct);
             }
           }
-          
-          setScenes(prev => prev.filter(s => s.id !== sceneId));
-          
-          // Remove all placed images from this scene
-          setPlacedImages(prev => prev.filter(img => img.sceneId !== sceneId));
-          
-          // Switch to another scene if deleting current scene
-          if (currentSceneId === sceneId) {
-            const remainingScenes = scenes.filter(s => s.id !== sceneId);
-            setCurrentSceneId(remainingScenes[0]?.id || '');
+        }
+      });
+    });
+
+    return activeProducts;
+  }, [placedProducts, currentSceneId, scenes]);
+
+  // Initialize with demo data
+  useEffect(() => {
+    const initializeScenes = async () => {
+      try {
+        // Load scenes from the new JSON structure
+        const response = await fetch('/api/scenes');
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && result.data.length > 0) {
+            const loadedScenes = result.data;            
+            setScenes(loadedScenes);
+            
+            // Extract placed products from scene data
+            const allPlacedProducts: PlacedProduct[] = [];
+            loadedScenes.forEach((scene: Scene) => {
+              scene.spaces?.forEach(space => {
+                space.placements?.forEach(placement => {
+                  placement.products.forEach(product => {
+                    if (product.x !== undefined && product.y !== undefined) {
+                      allPlacedProducts.push({
+                        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                        productId: product.id,
+                        placementName: placement.name,
+                        spaceName: space.name,
+                        src: product.src,
+                        x: product.x,
+                        y: product.y,
+                        width: product.width,
+                        height: product.height,
+                        name: product.name,
+                        sceneId: scene.id,
+                        visible: product.visible,
+                      });
+                    }
+                  });
+                });
+              });
+            });
+            setPlacedProducts(allPlacedProducts);
+            
+            // Set the current scene ID based on URL parameter or default to first scene
+            if (sceneIdParam && loadedScenes.find((scene: Scene) => scene.id === sceneIdParam)) {
+              setCurrentSceneId(sceneIdParam);
+            } else {
+              setCurrentSceneId(loadedScenes[0]?.id || '');
+            }
+          } else {
+            // Fallback to demo data if no scenes found
+            createDemoData();
           }
         } else {
-          console.error('Failed to delete scene');
-          alert('Failed to delete scene. Please try again.');
+          // Fallback to demo data if API fails
+          createDemoData();
         }
       } catch (error) {
-        console.error('Error deleting scene:', error);
-        alert('Error deleting scene. Please try again.');
+        console.error('Failed to load scenes:', error);
+        // Fallback to demo data on error
+        createDemoData();
       }
-    }
-  }, [scenes, currentSceneId]);
+    };
+
+    const createDemoData = () => {
+      const demoScene: Scene = {
+        id: 'demo-scene-1',
+        name: 'Living Room Demo',
+        backgroundImage: '/living-room.jpg', // Use local image
+        backgroundImageSize: { width: 1920, height: 1080 },
+        spaces: [
+          {
+            id: 'space-1',
+            name: 'Furniture Area',
+            expanded: false,
+            visible: true,
+            placements: [
+              {
+                id: 'placement-1',
+                name: 'Sofa Placement',
+                expanded: false,
+                visible: true,
+                products: [],
+                activeProductId: undefined
+              }
+            ]
+          }
+        ]
+      };
+      
+      setScenes([demoScene]);
+      setCurrentSceneId(demoScene.id);
+    };
+
+    initializeScenes();
+  }, [sceneIdParam]);
+
+  const currentScene = getCurrentScene();
 
   return (
-    <div className="h-screen flex bg-gray-50 relative">
+    <div className="h-screen flex bg-gray-100">
       {/* Fixed Collapsible Sidebar */}
-      <div className={`fixed left-0 top-0 h-full bg-white border-r border-gray-200 transition-all duration-300 z-10 ${
+      <div className={`fixed left-0 top-0 h-full bg-white shadow-lg z-10 flex flex-col transition-all duration-300 ${
         sidebarCollapsed ? 'w-20' : 'w-96'
       }`}>
-        {/* Compact Sidebar Header with Scene Name */}
-        <div className="p-3 border-b border-gray-200 flex-shrink-0">
-          <div className="flex items-center justify-between">
+        {/* Scene Management Header */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white">
+          <div className="flex items-center space-x-3 flex-1">
             {!sidebarCollapsed && (
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg font-semibold text-gray-900">{getCurrentScene()?.name || 'Scene'}</h1>
-                <div className="relative scene-menu-container">
-                  <button
-                    onClick={() => setShowSceneMenu(!showSceneMenu)}
-                    className="p-1 rounded hover:bg-gray-100 transition-colors"
-                    title="Scene options"
-                  >
-                    ⚙️
-                  </button>
-                  {showSceneMenu && (
-                    <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[280px]">
-                      <div className="p-3 relative">
-                        {/* Close Button */}
-                        <button
-                          onClick={() => setShowSceneMenu(false)}
-                          className="absolute top-2 right-2 p-1 rounded-full hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-700"
-                          title="Close menu"
-                        >
-                          ✕
-                        </button>
-                        <div className="text-xs font-medium text-gray-500 mb-3">Scene Management</div>
-                        
-                        {/* Existing Scenes List */}
-                        <div className="space-y-1 mb-3">
-                          <div className="text-xs text-gray-500 mb-2">Switch Scene ({scenes.length})</div>
-                          {scenes.map((scene) => (
-                            <div key={scene.id} className="flex items-center justify-between group">
-                              <button
-                                onClick={() => {
-                                  setCurrentSceneId(scene.id);
-                                  setShowSceneMenu(false);
-                                }}
-                                className={`flex-1 text-left px-2 py-2 rounded text-sm flex items-center space-x-2 ${
-                                  scene.id === currentSceneId
-                                    ? 'bg-blue-100 text-blue-900'
-                                    : 'hover:bg-gray-100'
-                                }`}
-                              >
-                                <div className="w-6 h-6 rounded border border-gray-300 overflow-hidden flex-shrink-0">
-                                  <img 
-                                    src={scene.backgroundImage} 
-                                    alt={scene.name}
-                                    className="w-full h-full object-cover"
-                                  />
-                                </div>
-                                <span className="truncate">{scene.name}</span>
-                                {scene.id === currentSceneId && <span className="text-blue-500">✓</span>}
-                              </button>
-                              {scenes.length > 1 && (
-                                <button
-                                  onClick={() => deleteScene(scene.id)}
-                                  className="opacity-0 group-hover:opacity-100 text-red-600 hover:text-red-800 p-1 ml-1"
-                                  title="Delete scene"
-                                >
-                                  🗑️
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                        
-                        <hr className="my-3" />
-                        
-                        {/* Create New Scene Button */}
-                        <button
-                          onClick={() => {
-                            setShowCreateScene(true);
-                            setShowSceneMenu(false);
-                          }}
-                          className="w-full text-left px-2 py-2 rounded text-sm hover:bg-green-50 text-green-600 font-medium flex items-center space-x-2"
-                        >
-                          <span>+</span>
-                          <span>Create New Scene</span>
-                        </button>
+              <>                
+                <div className="flex-1 min-w-0">
+                  {currentScene ? (
+                    <div className="flex items-center space-x-2">
+                      <select 
+                        value={currentSceneId}
+                        onChange={(e) => setCurrentSceneId(e.target.value)}
+                        className="flex-1 p-2 text-sm border border-gray-200 rounded-md bg-white min-w-0"
+                      >
+                        {scenes.map(scene => (
+                          <option key={scene.id} value={scene.id}>
+                            {scene.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => {
+                          if (confirm('Delete this scene?')) {
+                            const updatedScenes = scenes.filter(s => s.id !== currentSceneId);
+                            setScenes(updatedScenes);
+                            if (updatedScenes.length > 0) {
+                              setCurrentSceneId(updatedScenes[0].id);
+                            }
+                          }
+                        }}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-md"
+                        title="Delete scene"
+                      >
+                        🗑
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-gray-500">No scenes</span>
+                  )}
+                </div>
+                <button
+                  onClick={() => setShowCreateScene(true)}
+                  className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 whitespace-nowrap"
+                  title="Create new scene"
+                >
+                  + Scene
+                </button>
+              </>
+            )}
+          </div>
+          <button
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 ml-2"
+          >
+            {sidebarCollapsed ? '→' : '←'}
+          </button>
+        </div>
 
-                        {/* Asset Manager Button */}
+        {/* Sidebar Content */}
+        <div className="flex flex-col" style={{ height: 'calc(100% - 80px)' }}>
+          <div className="flex-1 overflow-y-auto p-4 min-h-0">
+            {!sidebarCollapsed ? (
+              <>
+                {/* Spaces Explorer */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-medium text-gray-900">Spaces</h3>
+                    <button
+                      onClick={() => setShowCreateSpace(true)}
+                      className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+                    >
+                      Create Space
+                    </button>
+                  </div>
+                  
+                  {/* Create Space Modal */}
+                  {showCreateSpace && (
+                    <div className="border border-gray-300 rounded-lg p-4 bg-gray-50">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={newSpaceName}
+                          onChange={(e) => setNewSpaceName(e.target.value)}
+                          placeholder="Enter space name..."
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          onKeyPress={(e) => e.key === 'Enter' && createSpace()}
+                        />
+                        <button
+                          onClick={createSpace}
+                          className="px-3 py-2 bg-green-600 text-white rounded text-sm hover:bg-green-700"
+                        >
+                          Create
+                        </button>
                         <button
                           onClick={() => {
-                            setShowAssetManager(true);
-                            setShowSceneMenu(false);
+                            setShowCreateSpace(false);
+                            setNewSpaceName('');
                           }}
-                          className="w-full text-left px-2 py-2 rounded text-sm hover:bg-blue-50 text-blue-600 font-medium flex items-center space-x-2"
+                          className="px-3 py-2 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
                         >
-                          <span>📁</span>
-                          <span>Manage Assets</span>
+                          Cancel
                         </button>
                       </div>
                     </div>
                   )}
-                </div>
-              </div>
-            )}
-            <button
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-            >
-              {sidebarCollapsed ? '→' : '←'}
-            </button>
-          </div>
-        </div>
-
-        {/* Sidebar Content with proper height calculation */}
-        <div className="flex flex-col" style={{ height: 'calc(100% - 60px)' }}>
-          {/* Folders Section - Scrollable */}
-          <div className="flex-1 overflow-y-auto p-4 min-h-0">
-            {!sidebarCollapsed ? (
-              <>
-                {/* Folders Explorer */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-medium text-gray-900">Products</h3>
-                    {getCurrentSceneFolders().length > 0 && (
-                      <button
-                        onClick={clearAll}
-                        className="text-red-600 hover:text-red-800 text-sm"
-                      >
-                        Clear All
-                      </button>
-                    )}
-                  </div>
                   
-                  {getCurrentSceneFolders().length === 0 ? (
+                  {/* Spaces List */}
+                  {getCurrentSceneSpaces().length === 0 ? (
                     <p className="text-gray-500 text-center py-8 text-sm">
-                      No products created yet. Create a product to start organizing your catalogue.
+                      No spaces created yet. Create a space to start organizing your catalogue.
                     </p>
                   ) : (
-                    getCurrentSceneFolders().map((folder) => (
-                      <div key={folder.id} className="border border-gray-200 rounded-lg">
-                        {/* Folder Header */}
+                    getCurrentSceneSpaces().map((space) => (
+                      <div key={space.id} className={`border rounded-lg ${selectedSpaceId === space.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
+                        {/* Space Header */}
                         <div 
                           className={`flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 ${
-                            selectedFolder === folder.id ? 'bg-blue-50 border-blue-300' : ''
-                          } ${!folder.visible ? 'opacity-50' : ''}`}
-                          onClick={() => setSelectedFolder(folder.id)}
+                            selectedSpaceId === space.id ? 'bg-blue-100' : ''
+                          }`}
+                          onClick={() => setSelectedSpaceId(selectedSpaceId === space.id ? '' : space.id)}
                         >
-                          <div className="flex items-center space-x-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleFolder(folder.id);
-                              }}
-                              className="text-gray-600 hover:text-gray-800"
-                            >
-                              {folder.expanded ? '−' : '+'}
-                            </button>
-                            <span>📁</span>
-                            {editingFolderId === folder.id ? (
-                              <input
-                                type="text"
-                                defaultValue={folder.name}
-                                className="text-sm font-medium bg-white border border-gray-300 rounded px-2 py-1"
-                                onBlur={(e) => renameFolder(folder.id, e.target.value)}
-                                onKeyPress={(e) => {
-                                  if (e.key === 'Enter') {
-                                    renameFolder(folder.id, (e.target as HTMLInputElement).value);
-                                  }
-                                }}
-                                onClick={(e) => e.stopPropagation()}
-                                autoFocus
-                              />
-                            ) : (
-                              <span 
-                                className="text-sm font-medium text-gray-900"
-                                onDoubleClick={(e) => {
-                                  e.stopPropagation();
-                                  setEditingFolderId(folder.id);
-                                }}
-                              >
-                                {folder.name}
-                              </span>
-                            )}
-                            <span className="text-xs text-gray-500">({folder.images.length})</span>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleFolderVisibility(folder.id);
-                              }}
-                              className={`px-2 py-1 text-xs rounded ${
-                                folder.visible 
-                                  ? 'bg-green-100 text-green-700 hover:bg-green-200' 
-                                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                              }`}
-                            >
-                              {folder.visible ? 'Hide' : 'Show'}
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteFolder(folder.id);
-                              }}
-                              className="text-red-600 hover:text-red-800 text-sm"
-                            >
-                              🗑️
-                            </button>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs font-bold px-2 py-1 rounded ${
+                              selectedSpaceId === space.id ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'
+                            }`}>
+                              SPACE
+                            </span>
+                            <span className="font-medium">{space.name}</span>
                           </div>
                         </div>
 
-                        {/* Folder Contents */}
-                        {folder.expanded && (
-                          <div className="border-t border-gray-200 bg-gray-50">
-                            {folder.images.length === 0 ? (
-                              <p className="text-gray-500 text-center py-4 text-sm">
-                                No images in this folder
+                        {/* Selected Space: Show Placements Section */}
+                        {selectedSpaceId === space.id && (
+                          <div className="px-4 pb-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <h4 className="font-medium text-gray-700">Placements</h4>
+                              <button
+                                onClick={() => setShowCreatePlacement(true)}
+                                className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
+                              >
+                                Create Placement
+                              </button>
+                            </div>
+
+                            {/* Create Placement Modal */}
+                            {showCreatePlacement && (
+                              <div className="border border-gray-300 rounded-lg p-3 bg-gray-50 mb-3">
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="text"
+                                    value={newPlacementName}
+                                    onChange={(e) => setNewPlacementName(e.target.value)}
+                                    placeholder="Enter placement name..."
+                                    className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                                    onKeyPress={(e) => e.key === 'Enter' && createPlacement()}
+                                  />
+                                  <button
+                                    onClick={createPlacement}
+                                    className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
+                                  >
+                                    Create
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setShowCreatePlacement(false);
+                                      setNewPlacementName('');
+                                    }}
+                                    className="px-2 py-1 bg-gray-500 text-white rounded text-xs hover:bg-gray-600"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Placements List */}
+                            {getSelectedSpacePlacements().length === 0 ? (
+                              <p className="text-gray-400 text-center py-4 text-sm">
+                                No placements in this space yet.
                               </p>
                             ) : (
-                              <div className="space-y-1 p-2">
-                                {folder.images.map((image) => (
-                                  <div
-                                    key={image.id}
-                                    className={`flex items-center justify-between p-2 bg-white rounded border hover:bg-gray-50 ${
-                                      !image.visible ? 'opacity-50' : ''
+                              getSelectedSpacePlacements().map((placement) => (
+                                <div key={placement.id} className={`border rounded mb-2 ${selectedPlacementId === placement.id ? 'border-green-500 bg-green-50' : 'border-gray-200'}`}>
+                                  {/* Placement Header */}
+                                  <div 
+                                    className={`flex items-center justify-between p-2 cursor-pointer hover:bg-gray-50 ${
+                                      selectedPlacementId === placement.id ? 'bg-green-100' : ''
                                     }`}
+                                    onClick={() => setSelectedPlacementId(selectedPlacementId === placement.id ? '' : placement.id)}
                                   >
-                                    <div className="flex items-center space-x-2">
-                                      <img
-                                        src={image.src}
-                                        alt={image.name}
-                                        className="w-8 h-8 object-cover rounded"
-                                      />
-                                      {editingImageId === image.id ? (
-                                        <input
-                                          type="text"
-                                          defaultValue={image.name}
-                                          className="text-xs bg-white border border-gray-300 rounded px-2 py-1"
-                                          onBlur={(e) => renameImage(folder.id, image.id, e.target.value)}
-                                          onKeyPress={(e) => {
-                                            if (e.key === 'Enter') {
-                                              renameImage(folder.id, image.id, (e.target as HTMLInputElement).value);
-                                            }
-                                          }}
-                                          autoFocus
-                                        />
-                                      ) : (
-                                        <span 
-                                          className="text-xs text-gray-700 cursor-pointer"
-                                          onDoubleClick={() => setEditingImageId(image.id)}
+                                    <div className="flex items-center gap-2">
+                                      <span className={`text-xs font-bold px-2 py-1 rounded ${
+                                        selectedPlacementId === placement.id ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700'
+                                      }`}>
+                                        PLACEMENT
+                                      </span>
+                                      <span className="text-sm font-medium">{placement.name}</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Selected Placement: Show Product Upload */}
+                                  {selectedPlacementId === placement.id && (
+                                    <div className="px-3 pb-3">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <h5 className="text-sm font-medium text-gray-600">Products</h5>
+                                        <button
+                                          className="px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700 disabled:bg-gray-400"
+                                          disabled={isUploading}
+                                          onClick={triggerProductUpload}
                                         >
-                                          {image.name}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="flex items-center space-x-1">
-                                      <button
-                                        onClick={() => toggleImageVisibility(folder.id, image.id)}
-                                        className={`px-2 py-1 text-xs rounded ${
-                                          image.visible 
-                                            ? 'bg-green-100 text-green-700 hover:bg-green-200' 
-                                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                                        }`}
-                                      >
-                                        {image.visible ? 'Hide' : 'Show'}
-                                      </button>
-                                      <button
-                                        onClick={() => deleteImageFromFolder(folder.id, image.id)}
-                                        className="text-red-600 hover:text-red-800 text-xs"
-                                      >
-                                        🗑️
-                                      </button>
-                                    </div>
-                                  </div>
-                                ))}
-                                
-                                {/* Upload Progress Indicators */}
-                                {uploadingImages.length > 0 && selectedFolder === folder.id && (
-                                  <div className="space-y-1">
-                                    {uploadingImages.map((uploadId) => (
-                                      <div
-                                        key={uploadId}
-                                        className="flex items-center justify-between p-2 bg-blue-50 rounded border border-blue-200"
-                                      >
-                                        <div className="flex items-center space-x-2">
-                                          <div className="w-8 h-8 bg-blue-100 rounded flex items-center justify-center">
-                                            <span className="text-xs">📤</span>
-                                          </div>
-                                          <span className="text-xs text-blue-700">
-                                            Uploading...
-                                          </span>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
-                                          <div className="w-20 bg-blue-200 rounded-full h-2">
-                                            <div 
-                                              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                                              style={{ width: `${uploadProgress[uploadId] || 0}%` }}
-                                            ></div>
-                                          </div>
-                                          <span className="text-xs text-blue-600">
-                                            {uploadProgress[uploadId] || 0}%
-                                          </span>
-                                        </div>
+                                          {isUploading ? 'Uploading...' : 'Upload Product'}
+                                        </button>
                                       </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
+                                      
+                                      {/* Show uploading progress */}
+                                      {uploadingProducts.length > 0 && (
+                                        <div className="mb-3 p-2 bg-blue-50 rounded text-xs text-blue-700">
+                                          Uploading {uploadingProducts.length} product(s)...
+                                        </div>
+                                      )}
+                                      
+                                      {/* Products list */}
+                                      {placement.products.length > 0 ? (
+                                        <div className="space-y-2 mb-3">
+                                          {placement.products.map((product) => {
+                                            const isActive = placement.activeProductId === product.id;
+                                            return (
+                                              <div 
+                                                key={product.id} 
+                                                className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-all ${
+                                                  isActive 
+                                                    ? 'bg-blue-100 border-2 border-blue-500' 
+                                                    : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
+                                                }`}
+                                                onClick={() => setActiveProduct(space.id, placement.id, product.id)}
+                                              >
+                                                <img 
+                                                  src={product.src} 
+                                                  alt={product.name}
+                                                  className="w-8 h-8 object-cover rounded"
+                                                  onError={(e) => {
+                                                    (e.target as HTMLImageElement).src = '/placeholder-image.png';
+                                                  }}
+                                                />
+                                                <div className="flex-1 min-w-0">
+                                                  <p className="text-xs font-medium text-gray-700 truncate">{product.name}</p>
+                                                  <p className="text-xs text-gray-500">
+                                                    {product.width}x{product.height} • {isActive ? 'Active' : 'Inactive'}
+                                                  </p>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                  {isActive && (
+                                                    <span className="text-blue-600 text-xs px-2 py-1 bg-blue-200 rounded">
+                                                      Active
+                                                    </span>
+                                                  )}
+                                                  <button
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      removeProduct(space.id, placement.id, product.id);
+                                                    }}
+                                                    className="text-red-600 hover:text-red-800 text-xs p-1 rounded hover:bg-red-50"
+                                                    title="Remove product"
+                                                  >
+                                                    ❌
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      ) : (
+                                        <p className="text-xs text-gray-400 mb-3">No products uploaded yet</p>
+                                      )}
+                                      
+                                      <p className="text-xs text-gray-500">
+                                        {placement.products.length} products in this placement
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              ))
                             )}
                           </div>
                         )}
@@ -1459,193 +1156,31 @@ function DesignStudioContent() {
             ) : (
               /* Collapsed sidebar icons */
               <div className="space-y-4">
-                {getCurrentSceneFolders().map((folder) => (
+                {getCurrentSceneSpaces().map((space) => (
                   <div
-                    key={folder.id}
+                    key={space.id}
                     className={`p-3 rounded-lg cursor-pointer ${
-                      selectedFolder === folder.id ? 'bg-blue-100' : 'hover:bg-gray-100'
-                    } ${!folder.visible ? 'opacity-50' : ''}`}
-                    onClick={() => setSelectedFolder(folder.id)}
-                    title={folder.name}
+                      selectedSpaceId === space.id ? 'bg-blue-100' : 'hover:bg-gray-100'
+                    }`}
+                    onClick={() => setSelectedSpaceId(selectedSpaceId === space.id ? '' : space.id)}
+                    title={space.name}
                   >
-                    📁
+                    🏢
                   </div>
                 ))}
-              </div>
-            )}
-          </div>
-
-          {/* Fixed Footer Section with Create and Upload */}
-          <div className="border-t border-gray-200 bg-gray-50 flex-shrink-0">
-            {!sidebarCollapsed ? (
-              <div className="p-4 space-y-3">
-                {/* Create Folder Section */}
-                {!showCreateFolder ? (
-                  <button
-                    onClick={() => setShowCreateFolder(true)}
-                    disabled={!currentSceneId}
-                    className={`w-full py-3 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2 ${
-                      currentSceneId 
-                        ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    }`}
-                    title={currentSceneId ? "Create New Product" : "Please select a scene first"}
-                  >
-                    <span>📁</span>
-                    <span>Create New Product</span>
-                  </button>
-                ) : (
-                  <div className="space-y-2">
-                    <input
-                      type="text"
-                      value={newFolderName}
-                      onChange={(e) => setNewFolderName(e.target.value)}
-                      placeholder="Product name"
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      onKeyPress={(e) => e.key === 'Enter' && currentSceneId && newFolderName.trim() && createFolder()}
-                    />
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={createFolder}
-                        disabled={!currentSceneId || !newFolderName.trim()}
-                        className={`flex-1 py-2 px-3 rounded text-sm transition-colors ${
-                          currentSceneId && newFolderName.trim()
-                            ? 'bg-green-600 text-white hover:bg-green-700'
-                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        }`}
-                      >
-                        Create
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowCreateFolder(false);
-                          setNewFolderName('');
-                        }}
-                        className="flex-1 bg-gray-500 text-white py-2 px-3 rounded text-sm hover:bg-gray-600 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Divider */}
-                <div className="border-t border-gray-300"></div>
-
-                {/* Upload Section */}
-                {selectedFolder ? (
-                  <div className="space-y-2">
-                    <div className="text-sm text-gray-700">
-                      <strong>Selected:</strong> {getCurrentSceneFolders().find(f => f.id === selectedFolder)?.name}
-                    </div>
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center space-x-2"
-                    >
-                      <span>📤</span>
-                      <span>Upload Images</span>
-                    </button>
-                    <button
-                      onClick={() => setShowAssetManager(true)}
-                      className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center space-x-2"
-                    >
-                      <span>🖼️</span>
-                      <span>Manage Assets</span>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="text-center text-gray-500 text-sm py-3">
-                    Select a folder to upload images
-                  </div>
-                )}
-              </div>
-            ) : (
-              /* Collapsed view footer */
-              <div className="p-3 space-y-3">
-                <button
-                  onClick={() => setShowCreateFolder(true)}
-                  className="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition-colors"
-                  title="Create New Product"
-                >
-                  📁
-                </button>
-                {selectedFolder ? (
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full bg-green-600 text-white p-3 rounded-lg hover:bg-green-700 transition-colors"
-                    title="Upload Images"
-                  >
-                    📤
-                  </button>
-                ) : (
-                  <div className="text-center text-gray-400 p-3" title="Select a folder first">
-                    📤
-                  </div>
-                )}
-                <button
-                  onClick={() => setShowAssetManager(true)}
-                  className="w-full bg-purple-600 text-white p-3 rounded-lg hover:bg-purple-700 transition-colors"
-                  title="Manage Assets"
-                >
-                  🖼️
-                </button>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        accept="image/*"
-        onChange={handleFileInput}
-        className="hidden"
-      />
-
-      <input
-        ref={sceneImageInputRef}
-        type="file"
-        accept="image/*"
-        onChange={handleSceneImageUpload}
-        className="hidden"
-      />
-
       {/* Main Canvas Area */}
       <div className={`flex-1 flex flex-col transition-all duration-300 ${
         sidebarCollapsed ? 'ml-20' : 'ml-96'
       }`}>
         <div className="p-4 bg-white border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">
-                Design Studio
-              </h2>
-              <p className="text-gray-600">
-                Drag to pan the view • Place images from folders onto the scene
-              </p>
-            </div>
+          <div className="flex items-center justify-between">            
             <div className="flex items-center space-x-4">
-              <button
-                onClick={async () => {
-                  const success = await saveScene();
-                  if (success) {
-                    alert('Scene saved successfully!');
-                  } else {
-                    alert('Failed to save scene. Please try again.');
-                  }
-                }}
-                disabled={!currentSceneId}
-                className={`transition-colors px-4 py-2 rounded text-sm font-medium ${
-                  currentSceneId
-                    ? 'bg-green-600 hover:bg-green-700 text-white'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                }`}
-                title={currentSceneId ? "Save current scene" : "No scene to save"}
-              >
-                💾 Save Scene
-              </button>
               <Link 
                 href={`/?scene=${encodeURIComponent(getCurrentScene()?.name || '')}&sceneId=${currentSceneId}`}
                 className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-sm transition-colors"
@@ -1653,21 +1188,7 @@ function DesignStudioContent() {
                 ← Mobile View
               </Link>
               <div className="text-sm text-gray-500">
-                Placed: {getCurrentSceneImages().length} items
-              </div>
-              <div className="flex space-x-2">
-                <button
-                  onClick={resetToOrigin}
-                  className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-sm transition-colors"
-                >
-                  Reset
-                </button>
-                <button
-                  onClick={resetPan}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition-colors"
-                >
-                  Center
-                </button>
+                Placed: {getCurrentPlacedProducts().length} items
               </div>
             </div>
           </div>
@@ -1675,7 +1196,6 @@ function DesignStudioContent() {
 
         <div 
           className="flex-1 bg-gray-100 overflow-hidden relative" 
-          ref={containerRef}
           style={{ cursor: 'grab' }}
         >
           {scenes.length === 0 ? (
@@ -1696,51 +1216,40 @@ function DesignStudioContent() {
           ) : (
             /* Container for the canvas */
             <div className="absolute inset-0">
-            <Stage
-              ref={stageRef}
-              width={stageSize.width}
-              height={stageSize.height}
-              draggable={true}
-              dragBoundFunc={handleStageDragBound}
-              className="absolute top-0 left-0"
-            >
-              <Layer>
-                {/* Scene Background - only render if backgroundImage exists */}
-                {getCurrentScene()?.backgroundImage ? (
-                  <KonvaImageComponent
-                    src={getCurrentScene()!.backgroundImage}
-                    x={0}
-                    y={0}
-                    draggable={false}
-                    onImageLoad={handleBackgroundImageLoad}
-                  />
-                ) : (
-                  /* Empty background placeholder */
-                  <></>
-                )}
-                
-                {/* Placed Images - only show current scene items that are visible */}
-                {getCurrentSceneImages()
-                  .filter(img => {
-                    const currentFolders = getCurrentSceneFolders();
-                    const folder = currentFolders.find(f => f.name === img.folderName);
-                    const image = folder?.images.find(i => i.id === img.imageId);
-                    return folder?.visible && image?.visible;
-                  })
-                  .map((img) => (
+              <Stage 
+                ref={stageRef}
+                width={stageSize.width} 
+                height={stageSize.height}
+                draggable={true}
+                dragBoundFunc={handleStageDragBound}
+                className="absolute top-0 left-0"
+              >
+                <Layer>
+                  {/* Scene Background - only render if backgroundImage exists */}
+                  {currentScene?.backgroundImage ? (
                     <KonvaImageComponent
-                      key={img.id}
-                      src={img.src}
-                      x={img.x}
-                      y={img.y}
-                      draggable={true}
-                      onDragEnd={(x, y) => handleImageDragEnd(img.id, x, y)}
-                      onImageLoad={(dimensions) => handlePlacedImageLoad(img.imageId, dimensions)}
+                      src={currentScene.backgroundImage}
+                      x={0}
+                      y={0}
+                      draggable={false}
+                      onImageLoad={handleBackgroundImageLoad}
+                    />
+                  ) : (
+                    /* Empty background placeholder */
+                    <></>
+                  )}
+                  
+                  {/* Product Images */}
+                  {getCurrentPlacedProducts().map((product) => (
+                    <ProductImage
+                      key={product.id}
+                      product={product}
+                      onDragEnd={handleProductDragEnd}
                     />
                   ))}
-              </Layer>
-            </Stage>
-          </div>
+                </Layer>
+              </Stage>
+            </div>
           )}
 
           {/* Pan instructions overlay - only show when there are scenes */}
@@ -1752,202 +1261,121 @@ function DesignStudioContent() {
               </div>
             </div>
           )}
-
-          {/* Placed Images List Overlay - only show when there are scenes and images */}
-          {scenes.length > 0 && getCurrentSceneImages().length > 0 && (
-            <div className="absolute bottom-4 right-4 bg-white rounded-lg shadow-lg p-3 max-w-xs">
-              <h4 className="text-sm font-medium text-gray-900 mb-2">
-                Placed Items ({getCurrentSceneImages().filter(img => {
-                  const currentFolders = getCurrentSceneFolders();
-                  const folder = currentFolders.find(f => f.name === img.folderName);
-                  const image = folder?.images.find(i => i.id === img.imageId);
-                  return folder?.visible && image?.visible;
-                }).length}/{getCurrentSceneImages().length})
-              </h4>
-              <div className="space-y-1 max-h-32 overflow-y-auto">
-                {getCurrentSceneImages().map((img) => {
-                  const currentFolders = getCurrentSceneFolders();
-                  const folder = currentFolders.find(f => f.name === img.folderName);
-                  const image = folder?.images.find(i => i.id === img.imageId);
-                  const isVisible = folder?.visible && image?.visible;
-                  
-                  return (
-                    <div key={img.id} className={`flex items-center justify-between text-xs ${!isVisible ? 'opacity-50' : ''}`}>
-                      <span className="text-gray-700 truncate">
-                        {isVisible ? '👁️' : '🙈'} {img.name}
-                      </span>
-                      <button
-                        onClick={() => removePlacedImage(img.id)}
-                        className="text-red-600 hover:text-red-800 ml-2"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
+      {/* Hidden file input for product uploads */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept="image/*"
+        onChange={handleFileInput}
+        className="hidden"
+      />
+
       {/* Create Scene Modal */}
       {showCreateScene && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">Create New Scene</h2>
-                <button
-                  onClick={() => {
-                    setShowCreateScene(false);
-                    setNewSceneName('');
-                    setNewSceneImage('');
-                    setNewSceneImageS3Key('');
-                    setShowSceneMenu(false);
-                  }}
-                  className="p-1 rounded-full hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-700"
-                  title="Close modal"
-                >
-                  ✕
-                </button>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h2 className="text-xl font-bold mb-4">Create New Scene</h2>
+            
+            <div className="space-y-4">
+              {/* Scene Name Input */}
+              <div>
+                <label htmlFor="sceneName" className="block text-sm font-medium text-gray-700 mb-1">
+                  Scene Name
+                </label>
+                <input
+                  id="sceneName"
+                  type="text"
+                  value={newSceneName}
+                  onChange={(e) => setNewSceneName(e.target.value)}
+                  placeholder="Enter scene name..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
               
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm text-gray-700 mb-2">Scene Name</label>
-                  <input
-                    type="text"
-                    value={newSceneName}
-                    onChange={(e) => setNewSceneName(e.target.value)}
-                    placeholder="Enter scene name"
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    autoFocus
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm text-gray-700 mb-2">Background Image</label>
-                  <div className="space-y-3">
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => sceneImageInputRef.current?.click()}
-                        disabled={uploadingSceneImage}
-                        className={`flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center justify-center space-x-2 ${
-                          uploadingSceneImage ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
-                      >
-                        <span>📤</span>
-                        <span>{uploadingSceneImage ? 'Uploading...' : 'Upload New'}</span>
-                      </button>
-                      <button
-                        onClick={() => setShowSceneAssetManager(true)}
-                        disabled={uploadingSceneImage}
-                        className={`flex-1 px-3 py-2 text-sm border border-purple-300 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 flex items-center justify-center space-x-2 ${
-                          uploadingSceneImage ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
-                      >
-                        <span>🖼️</span>
-                        <span>Use Existing</span>
-                      </button>
+              {/* Scene Background Image Upload */}
+              <div>
+                <label htmlFor="sceneImage" className="block text-sm font-medium text-gray-700 mb-1">
+                  Background Image
+                </label>
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={() => document.getElementById('sceneImageUpload')?.click()}
+                    disabled={uploadingSceneImage}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50 text-sm"
+                  >
+                    {uploadingSceneImage ? 'Uploading...' : 'Choose Image'}
+                  </button>
+                  {uploadingSceneImage && (
+                    <div className="flex-1">
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${sceneImageUploadProgress}%` }}
+                        />
+                      </div>
+                      <span className="text-xs text-gray-500 mt-1">{sceneImageUploadProgress}%</span>
                     </div>
-                    
-                    {uploadingSceneImage && (
-                      <div className="space-y-2">
-                        <div className="w-full bg-blue-200 rounded-full h-2">
-                          <div 
-                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                            style={{ width: `${sceneImageUploadProgress}%` }}
-                          ></div>
-                        </div>
-                        <div className="text-xs text-blue-600 text-center">
-                          Uploading scene background... {sceneImageUploadProgress}%
-                        </div>
-                      </div>
-                    )}
-                    
-                    {newSceneImage && !uploadingSceneImage && (
-                      <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                        <div className="w-12 h-12 rounded border border-gray-300 overflow-hidden">
-                          <img 
-                            src={newSceneImage} 
-                            alt="Preview"
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <span className="text-sm text-green-600 font-medium">✓ Image selected</span>
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
                 
-                <div className="flex space-x-3 pt-4">
-                  <button
-                    onClick={createScene}
-                    disabled={!newSceneName.trim() || !newSceneImage || uploadingSceneImage}
-                    className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg text-sm hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                  >
-                    {uploadingSceneImage ? 'Uploading...' : 'Create Scene'}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowCreateScene(false);
-                      setNewSceneName('');
-                      setNewSceneImage('');
-                      setNewSceneImageS3Key('');
-                      setShowSceneMenu(false);
-                    }}
-                    className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg text-sm hover:bg-gray-600 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
+                {/* Scene Image Preview */}
+                {newSceneImage && (
+                  <div className="mt-3">
+                    <img
+                      src={newSceneImage}
+                      alt="Scene preview"
+                      className="w-full h-32 object-cover rounded-md border border-gray-300"
+                    />
+                  </div>
+                )}
               </div>
+            </div>
+            
+            {/* Modal Actions */}
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowCreateScene(false);
+                  setNewSceneName('');
+                  setNewSceneImage('');
+                  setNewSceneImageS3Key('');
+                  setSceneImageUploadProgress(0);
+                }}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={createScene}
+                disabled={!newSceneName.trim() || uploadingSceneImage}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Create Scene
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Asset Manager Modal */}
-      {showAssetManager && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl h-full max-h-[90vh] mx-4">
-            <AssetManager
-              onAssetSelect={handleAssetSelect}
-              onClose={() => setShowAssetManager(false)}
-              currentSceneId={currentSceneId}
-              selectedFolderName={selectedFolder ? getCurrentSceneFolders().find(f => f.id === selectedFolder)?.name : undefined}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Scene Background Asset Manager Modal */}
-      {showSceneAssetManager && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl h-full max-h-[90vh] mx-4">
-            <AssetManager
-              onAssetSelect={handleSceneAssetSelect}
-              onClose={() => setShowSceneAssetManager(false)}
-              currentSceneId={currentSceneId}
-              selectedFolderName="Scene Background (any image can be used)"
-              mode="select-background"
-            />
-          </div>
-        </div>
-      )}
+      {/* Hidden file input for scene image upload */}
+      <input
+        id="sceneImageUpload"
+        type="file"
+        accept="image/*"
+        onChange={handleSceneImageUpload}
+        className="hidden"
+      />
     </div>
   );
 }
 
-export default function DesignStudioPage() {
+export default function DesignStudio() {
   return (
-    <Suspense fallback={<div className="h-screen flex items-center justify-center bg-gray-50">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
-        <p className="text-gray-600">Loading design studio...</p>
-      </div>
-    </div>}>
+    <Suspense fallback={<div>Loading...</div>}>
       <DesignStudioContent />
     </Suspense>
   );

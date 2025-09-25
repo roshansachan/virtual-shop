@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react'
 import Image from 'next/image'
 
 // Types for the filesystem-based configuration
-interface FolderImage {
+interface PlacementProductImage {
   id: string
   name: string
   src: string
@@ -16,12 +16,12 @@ interface FolderImage {
   y: number
 }
 
-interface Folder {
+interface Placement {
   id: string
   name: string
   expanded: boolean
   visible: boolean
-  images: FolderImage[]
+  images: PlacementProductImage[]
 }
 
 interface Scene {
@@ -30,7 +30,7 @@ interface Scene {
   backgroundImage: string
   backgroundImageSize: { width: number; height: number }
   backgroundImageS3Key?: string
-  folders: Folder[]
+  placements: Placement[]
 }
 
 interface SceneConfig {
@@ -53,7 +53,7 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
   const [scale, setScale] = useState(1)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedFolder, setSelectedFolder] = useState<Folder | null>(null)
+  const [selectedPlacement, setSelectedPlacement] = useState<Placement | null>(null)
   const [showDrawer, setShowDrawer] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -129,28 +129,28 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
   }
 
   /**
-   * Gets the visible image from a folder (only one image per folder is shown)
+   * Gets the visible image from a placement (only one image per placement is shown)
    */
-  const getVisibleImage = (folder: Folder): FolderImage | null => {
-    return folder.images.find(img => img.visible) || folder.images[0] || null
+  const getVisibleImage = (placement: Placement): PlacementProductImage | null => {
+    return placement.images.find(img => img.visible) || placement.images[0] || null
   }
 
   /**
-   * Gets all visible images across all folders for rendering
+   * Gets all visible images across all placements for rendering
    */
-  const getVisibleImages = (): FolderImage[] => {
+  const getVisibleImages = (): PlacementProductImage[] => {
     if (!scene) return []
 
-    return scene.folders
-      .filter(folder => folder.visible)
-      .map(folder => getVisibleImage(folder))
-      .filter((img): img is FolderImage => img !== null)
+    return scene.placements
+      .filter(placement => placement.visible)
+      .map(placement => getVisibleImage(placement))
+      .filter((img): img is PlacementProductImage => img !== null)
   }
 
   /**
    * Creates a hotspot element with pulsing animation
    */
-  const createHotspot = (image: FolderImage, folder: Folder) => {
+  const createHotspot = (image: PlacementProductImage, placement: Placement) => {
     const hotspotSize = 24
     const scaledX = image.x * scale
     const scaledY = image.y * scale
@@ -170,7 +170,7 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
           width: `${hotspotSize}px`,
           height: `${hotspotSize}px`,
         }}
-        onClick={() => handleHotspotClick(folder)}
+        onClick={() => handleHotspotClick(placement)}
       >
         {/* Pulsing ring */}
         <div className="absolute inset-0 rounded-full border-2 border-white animate-ping opacity-75" />
@@ -184,38 +184,38 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
   }
 
   /**
-   * Handles hotspot click to show folder options
+   * Handles hotspot click to show placement options
    */
-  const handleHotspotClick = (folder: Folder) => {
-    setSelectedFolder(folder)
+  const handleHotspotClick = (placement: Placement) => {
+    setSelectedPlacement(placement)
     setShowDrawer(true)
   }
 
   /**
-   * Handles image switching within a folder
+   * Handles image switching within a placement
    */
-  const handleImageSwitch = (newImage: FolderImage) => {
-    if (!scene || !selectedFolder) return
+  const handleImageSwitch = (newImage: PlacementProductImage) => {
+    if (!scene || !selectedPlacement) return
 
     // Update the scene state to show the new image
     const updatedScene = {
       ...scene,
-      folders: scene.folders.map(folder => {
-        if (folder.id === selectedFolder.id) {
+      placements: scene.placements.map(placement => {
+        if (placement.id === selectedPlacement.id) {
           return {
-            ...folder,
-            images: folder.images.map(img => ({
+            ...placement,
+            images: placement.images.map(img => ({
               ...img,
               visible: img.id === newImage.id
             }))
           }
         }
-        return folder
+        return placement
       })
     }
 
     setScene(updatedScene)
-    setSelectedFolder(updatedScene.folders.find(f => f.id === selectedFolder.id) || null)
+    setSelectedPlacement(updatedScene.placements.find(f => f.id === selectedPlacement.id) || null)
     closeDrawer()
   }
 
@@ -224,7 +224,7 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
    */
   const closeDrawer = () => {
     setShowDrawer(false)
-    setSelectedFolder(null)
+    setSelectedPlacement(null)
   }
 
   // Load scene on mount or when props change
@@ -382,9 +382,9 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
             }}
           />
 
-          {/* Placed Images */}
+          {/* Placed Placements */}
           {visibleImages.map((image) => {
-            const folderWithImage = scene.folders.find(f => f.images.some(img => img.id === image.id))
+            const placementWithImage = scene.placements.find(f => f.images.some(img => img.id === image.id))
             
             return (
               <React.Fragment key={`image-${image.id}`}>
@@ -402,13 +402,13 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
                   }}
                   draggable={false}
                   onError={(e) => {
-                    console.error('Failed to load product image:', image.src)
+                    console.error('Failed to load placement image:', image.src)
                     e.currentTarget.style.display = 'none'
                   }}
                 />
-                {/* Only show hotspot if folder has multiple images and indicators are not hidden */}
-                {folderWithImage && folderWithImage.images.length > 0 && 
-                  createHotspot(image, folderWithImage)
+                {/* Only show hotspot if placement has multiple images and indicators are not hidden */}
+                {placementWithImage && placementWithImage.images.length > 0 && 
+                  createHotspot(image, placementWithImage)
                 }
               </React.Fragment>
             )
@@ -439,12 +439,12 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
       )}
 
       {/* Bottom Drawer for Image Selection */}
-      {showDrawer && selectedFolder && (
+      {showDrawer && selectedPlacement && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end">
           <div className="bg-white w-full rounded-t-2xl shadow-lg max-h-[80vh] flex flex-col">
             {/* Drawer Header */}
             <div className="flex justify-between items-center p-4 border-b">
-              <h3 className="text-lg font-semibold">{selectedFolder.name}</h3>
+              <h3 className="text-lg font-semibold">{selectedPlacement.name}</h3>
               <button 
                 onClick={closeDrawer}
                 className="text-gray-500 hover:text-gray-700"
@@ -458,7 +458,7 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
             {/* Image Gallery */}
             <div className="flex-1 overflow-y-auto p-4">
               <div className="grid grid-cols-2 gap-4">
-                {selectedFolder.images.map((image) => (
+                {selectedPlacement.images.map((image) => (
                   <div key={image.id} className="bg-gray-50 rounded-lg overflow-hidden">
                     <div className="aspect-square relative bg-gray-100">
                       <Image

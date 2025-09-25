@@ -58,10 +58,10 @@ Object.defineProperty(exports, 'AWS_REGION', {
 });
 
 // Generate S3 key for organizing files
-export function generateS3Key(sceneId: string, folderId: string, filename: string): string {
+export function generateS3Key(sceneId: string, placementId: string, filename: string): string {
   const timestamp = Date.now();
   const fileExtension = filename.split('.').pop()?.toLowerCase() || 'jpg';
-  return `scenes/${sceneId}/products/${folderId}/${timestamp}-${filename}`;
+  return `scenes/${sceneId}/products/${placementId}/${timestamp}-${filename}`;
 }
 
 // Generate S3 key for scene background images
