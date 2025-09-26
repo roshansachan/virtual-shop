@@ -60,15 +60,11 @@ export async function POST(request: NextRequest) {
     const result = await s3Client.send(command);
     console.log('S3 upload result:', result);
 
-    // Generate public URL
-    const imageUrl = getS3Url(s3Key);
-
-    // Return success response with image details
+    // Return success response with S3 key only
     return NextResponse.json({
       success: true,
       data: {
-        url: imageUrl,
-        key: s3Key,
+        key: s3Key,        // Only return the key
         filename: file.name,
         size: file.size,
         type: file.type,

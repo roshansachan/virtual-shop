@@ -6,45 +6,17 @@ import { useSearchParams } from 'next/navigation';
 import { Stage, Layer, Image as KonvaImage } from 'react-konva';
 import type Konva from 'konva';
 import useImage from 'use-image';
+import { ThemeType, Theme, ThemeTypeValue, DBTheme, SceneType, Scene, Space, Placement, Product, Scene as BaseScene } from '@/types';
+import SettingsDropdown from '@/components/SettingsDropdown';
+import ThemeManagementModal from '@/components/ThemeManagementModal';
+import CreateSceneModal from '@/components/CreateSceneModal';
+import CreateSpaceModal from '@/components/CreateSpaceModal';
+import AddProductImageModal from '@/components/AddProductImageModal';
+import SceneManagementHeader from '@/components/SceneManagementHeader';
+import { generateS3Url } from '@/lib/s3-utils';
 
-// New hierarchy interfaces
-interface Product {
-  id: string;
-  src: string;
-  name: string;
-  width: number;
-  height: number;
-  visible: boolean;
-  s3Key?: string;
-  x?: number;
-  y?: number;
-}
-
-interface Placement {
-  id: string;
-  name: string;
-  expanded: boolean;
-  visible: boolean;
-  products: Product[];
-  activeProductId?: string; // Only one product can be active at a time
-}
-
-interface Space {
-  id: string;
-  name: string;
-  expanded: boolean;
-  visible: boolean;
-  placements: Placement[];
-}
-
-interface Scene {
-  id: string;
-  name: string;
-  backgroundImage: string;
-  backgroundImageSize: { width: number; height: number };
-  spaces: Space[];
-  backgroundImageS3Key?: string;
-}
+// New hierarchy interfaces - using global types
+// All Scene, Space, Placement, Product interfaces are now imported from types/index.ts
 
 interface PlacedProduct {
   id: string;
@@ -90,6 +62,46 @@ const ProductImage: React.FC<ProductImageProps> = ({ product, onDragEnd }) => {
       shadowOpacity={0.6}
       shadowOffsetX={5}
       shadowOffsetY={5}
+    />
+  );
+};
+
+// Konva Image Component for Placement Images
+interface PlacementImageComponentProps {
+  placementImage: {
+    id: string;
+    src: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    visible: boolean;
+    placementImageId: number;
+    placementId: string;
+    spaceId: string;
+    name: string;
+  };
+  onDragEnd: (placementImage: any, x: number, y: number) => void;
+}
+
+const PlacementImageComponent: React.FC<PlacementImageComponentProps> = ({ placementImage, onDragEnd }) => {
+  const [image] = useImage(placementImage.src);
+
+  const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+    onDragEnd(placementImage, e.target.x(), e.target.y());
+  };
+
+  if (!image || !placementImage.visible) return null;
+
+  return (
+    <KonvaImage
+      image={image}
+      x={placementImage.x}
+      y={placementImage.y}
+      width={placementImage.width}
+      height={placementImage.height}
+      draggable
+      onDragEnd={handleDragEnd}
     />
   );
 };
@@ -206,23 +218,25 @@ function DesignStudioContent() {
   // State for new hierarchy
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [currentSceneId, setCurrentSceneId] = useState<string>('');
+  const lastFetchedSceneRef = useRef<string>(''); // Track last scene that had spaces fetched
   const [selectedSpaceId, setSelectedSpaceId] = useState<string>('');
+  const lastFetchedSpaceRef = useRef<string>(''); // Track last space that had placements fetched
+  const lastFetchedPlacementRef = useRef<string>(''); // Track last placement that had images fetched
   const [selectedPlacementId, setSelectedPlacementId] = useState<string>('');
   const [placedProducts, setPlacedProducts] = useState<PlacedProduct[]>([]);
+  const [refreshScenes, setRefreshScenes] = useState<(() => Promise<void>) | null>(null);
+  const [pendingSceneName, setPendingSceneName] = useState<string | null>(null); // Track newly created scene
+  const [loadingSpaces, setLoadingSpaces] = useState<boolean>(false); // Loading state for spaces
   
   // UI state
-  const [newSpaceName, setNewSpaceName] = useState('');
   const [newPlacementName, setNewPlacementName] = useState('');
   const [showCreateSpace, setShowCreateSpace] = useState(false);
   const [showCreatePlacement, setShowCreatePlacement] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showSceneMenu, setShowSceneMenu] = useState(false);
   const [showCreateScene, setShowCreateScene] = useState(false);
-  const [newSceneName, setNewSceneName] = useState('');
-  const [newSceneImage, setNewSceneImage] = useState('');
-  const [newSceneImageS3Key, setNewSceneImageS3Key] = useState('');
-  const [uploadingSceneImage, setUploadingSceneImage] = useState(false);
-  const [sceneImageUploadProgress, setSceneImageUploadProgress] = useState(0);
+  const [showAddProductImage, setShowAddProductImage] = useState(false);
+  const [productImageForm, setProductImageForm] = useState({ name: '', image: '' });
   
   // Product upload state
   const [isUploading, setIsUploading] = useState(false);
@@ -233,13 +247,98 @@ function DesignStudioContent() {
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
   const [backgroundImageSize, setBackgroundImageSize] = useState({ width: 1920, height: 1080 });
   
+  // Settings and theme management state
+  const [showThemeManagement, setShowThemeManagement] = useState(false);
+  const [themes, setThemes] = useState<Theme[]>([]);
+
+  // Load themes from API
+  const loadThemes = useCallback(async () => {
+    try {
+      const response = await fetch('/api/themes');
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setThemes(result.data);
+        } else {
+          console.error('Failed to load themes:', result.error);
+        }
+      } else {
+        console.error('Failed to load themes: HTTP', response.status);
+      }
+    } catch (error) {
+      console.error('Error loading themes:', error);
+    }
+  }, []);
+
+  // Create theme via API
+  const handleCreateTheme = useCallback(async (name: string, themeType: ThemeTypeValue | null, image?: string) => {
+    try {
+      const response = await fetch('/api/themes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name,
+          theme_type: themeType,
+          image: image || null,
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          // Refresh themes list
+          await loadThemes();
+        } else {
+          alert(`Failed to create theme: ${result.error}`);
+        }
+      } else {
+        const result = await response.json().catch(() => ({ error: 'Unknown error' }));
+        alert(`Failed to create theme: ${result.error || 'Server error'}`);
+      }
+    } catch (error) {
+      console.error('Error creating theme:', error);
+      alert('Failed to create theme. Please try again.');
+    }
+  }, [loadThemes]);
+
+  // Delete theme via API
+  const handleDeleteTheme = useCallback(async (id: number) => {
+    if (!confirm('Are you sure you want to delete this theme?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/themes/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          // Refresh themes list
+          await loadThemes();
+        } else {
+          alert(`Failed to delete theme: ${result.error}`);
+        }
+      } else {
+        const result = await response.json().catch(() => ({ error: 'Unknown error' }));
+        alert(`Failed to delete theme: ${result.error || 'Server error'}`);
+      }
+    } catch (error) {
+      console.error('Error deleting theme:', error);
+      alert('Failed to delete theme. Please try again.');
+    }
+  }, [loadThemes]);
+
   // File input refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
 
   // Helper functions
   const getCurrentScene = useCallback(() => {
-    return scenes.find(scene => scene.id === currentSceneId);
+    return scenes.find(scene => scene.id === currentSceneId || scene.dbId === currentSceneId);
   }, [scenes, currentSceneId]);
 
   const getCurrentSceneSpaces = useCallback(() => {
@@ -262,52 +361,370 @@ function DesignStudioContent() {
     return placements.find(placement => placement.id === selectedPlacementId);
   }, [getSelectedSpacePlacements, selectedPlacementId]);
 
-  // Space management functions
-  const createSpace = useCallback(() => {
-    if (newSpaceName.trim()) {
-      const newSpace: Space = {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-        name: newSpaceName.trim(),
-        expanded: false,
-        visible: true,
-        placements: []
-      };
-      setScenes(prev => prev.map(scene =>
-        scene.id === currentSceneId
-          ? { ...scene, spaces: [...(scene.spaces || []), newSpace] }
-          : scene
-      ));
-      setNewSpaceName('');
-      setShowCreateSpace(false);
+  // Fetch spaces for the current scene from database
+  const fetchSpacesForScene = useCallback(async (sceneDbId: string) => {
+    setLoadingSpaces(true);
+    try {
+      const response = await fetch(`/api/spaces?scene_id=${sceneDbId}`);
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        // Convert database spaces to frontend format
+        const dbSpaces = data.data.map((dbSpace: any) => ({
+          id: dbSpace.id.toString(),
+          name: dbSpace.name,
+          placements: [], // Placements will be loaded separately if needed
+          expanded: false,
+          visible: true,
+          image: dbSpace.image,
+          dbId: dbSpace.id.toString()
+        }));
+        
+        // Update the current scene with the fetched spaces
+        setScenes(prevScenes => prevScenes.map(scene => 
+          scene.dbId === sceneDbId 
+            ? { ...scene, spaces: dbSpaces }
+            : scene
+        ));
+      }
+    } catch (error) {
+      console.error('Error fetching spaces for scene:', error);
+    } finally {
+      setLoadingSpaces(false);
     }
-  }, [newSpaceName, currentSceneId]);
+  }, []);
+
+  // Fetch placements for the current space from database
+  const fetchPlacementsForSpace = useCallback(async (spaceDbId: string) => {
+    try {
+      const response = await fetch(`/api/placements?space_id=${spaceDbId}`);
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        // Convert database placements to frontend format
+        const dbPlacements = data.data.map((dbPlacement: any) => ({
+          id: dbPlacement.id.toString(),
+          name: dbPlacement.name,
+          products: [], // Products will be loaded separately if needed
+          dbId: dbPlacement.id.toString()
+        }));
+        
+        // Update the current space with the fetched placements
+        setScenes(prevScenes => prevScenes.map(scene => ({
+          ...scene,
+          spaces: scene.spaces.map(space => 
+            space.dbId === spaceDbId 
+              ? { ...space, placements: dbPlacements }
+              : space
+          )
+        })));
+      }
+    } catch (error) {
+      console.error('Error fetching placements for space:', error);
+    }
+  }, []);
+
+  // Fetch placement images for the current placement from database
+  const fetchPlacementImages = useCallback(async (placementDbId: string) => {
+    try {
+      const response = await fetch(`/api/placement-images?placement_id=${placementDbId}`);
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        // Convert database placement images to frontend format with actual dimensions
+        const dbPlacementImages = await Promise.all(
+          data.data.map(async (dbImage: any) => {
+            // Load image to get actual dimensions
+            return new Promise<any>((resolve) => {
+              const img = new Image();
+              img.onload = () => {
+                resolve({
+                  id: typeof dbImage.id === 'string' ? parseInt(dbImage.id) : dbImage.id,
+                  name: dbImage.name,
+                  image: dbImage.image,
+                  x: dbImage.position?.x || 0,
+                  y: dbImage.position?.y || 0,
+                  width: img.naturalWidth > 0 ? Math.min(img.naturalWidth, 200) : 100, // Cap at 200px width
+                  height: img.naturalHeight > 0 ? Math.min(img.naturalHeight, 200) : 100, // Cap at 200px height
+                  visible: true
+                });
+              };
+              img.onerror = () => {
+                // Fallback to default dimensions if image fails to load
+                resolve({
+                  id: typeof dbImage.id === 'string' ? parseInt(dbImage.id) : dbImage.id,
+                  name: dbImage.name,
+                  image: dbImage.image,
+                  x: dbImage.position?.x || 0,
+                  y: dbImage.position?.y || 0,
+                  width: 100,
+                  height: 100,
+                  visible: true
+                });
+              };
+              img.src = dbImage.image.includes('http') ? dbImage.image : generateS3Url(dbImage.image);
+            });
+          })
+        );
+        
+        // Update the current placement with the fetched images
+        setScenes(prevScenes => prevScenes.map(scene => ({
+          ...scene,
+          spaces: scene.spaces.map(space => ({
+            ...space,
+            placements: space.placements.map(placement => {
+              if (placement.dbId === placementDbId) {
+                // Find the active image based on is_visible from database
+                const activeImage = data.data.find((dbImage: any) => dbImage.is_visible === true);
+                return { 
+                  ...placement, 
+                  placementImages: dbPlacementImages,
+                  activeProductImageId: activeImage ? (typeof activeImage.id === 'string' ? parseInt(activeImage.id) : activeImage.id) : null
+                };
+              }
+              return placement;
+            })
+          }))
+        })));
+      }
+    } catch (error) {
+      console.error('Error fetching placement images:', error);
+    }
+  }, []);
+
+  // Space management functions
+  const handleSpaceCreated = useCallback((newSpace: Space) => {
+    // Close the modal
+    setShowCreateSpace(false);
+    
+    // Refresh spaces from database to get the newly created space
+    const currentScene = getCurrentScene();
+    if (currentScene && currentScene.dbId) {
+      fetchSpacesForScene(currentScene.dbId);
+    }
+  }, [getCurrentScene, fetchSpacesForScene]);
 
   // Placement management functions
-  const createPlacement = useCallback(() => {
+  const createPlacement = useCallback(async () => {
     if (newPlacementName.trim() && selectedSpaceId) {
-      const newPlacement: Placement = {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-        name: newPlacementName.trim(),
-        expanded: false,
-        visible: true,
-        products: []
-      };
-      setScenes(prev => prev.map(scene =>
-        scene.id === currentSceneId
-          ? {
-              ...scene,
-              spaces: (scene.spaces || []).map(space =>
-                space.id === selectedSpaceId
-                  ? { ...space, placements: [...space.placements, newPlacement] }
-                  : space
-              )
-            }
-          : scene
-      ));
-      setNewPlacementName('');
-      setShowCreatePlacement(false);
+      try {
+        // Find the selected space to get its database ID
+        const selectedSpace = getSelectedSpace();
+        if (!selectedSpace || !selectedSpace.dbId) {
+          alert('Please select a valid space first');
+          return;
+        }
+
+        // Create placement in database
+        const response = await fetch('/api/placements', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            space_id: parseInt(selectedSpace.dbId),
+            name: newPlacementName.trim()
+          }),
+        });
+
+        const data = await response.json();
+        
+        if (data.success) {
+          // Clear the form
+          setNewPlacementName('');
+          setShowCreatePlacement(false);
+          
+          // Refresh placements from database
+          fetchPlacementsForSpace(selectedSpace.dbId);
+        } else {
+          alert(`Failed to create placement: ${data.error}`);
+        }
+      } catch (error) {
+        console.error('Error creating placement:', error);
+        alert('Failed to create placement. Please try again.');
+      }
     }
-  }, [newPlacementName, currentSceneId, selectedSpaceId]);
+  }, [newPlacementName, selectedSpaceId, getSelectedSpace, fetchPlacementsForSpace]);
+
+  // Update placement image position in database
+  const updatePlacementImagePosition = useCallback(async (placementImageId: number, x: number, y: number) => {
+    try {
+      const response = await fetch(`/api/placement-images/${placementImageId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          position: { x, y }
+        }),
+      });
+
+      const result = await response.json();
+      if (!result.success) {
+        console.error('Failed to update placement image position:', result.error);
+      }
+    } catch (error) {
+      console.error('Error updating placement image position:', error);
+    }
+  }, []);
+
+  // Handle when a product image is created from the modal
+  const handleProductImageCreated = useCallback((productImage: { id: number; name: string; image: string }) => {
+    const selectedPlacement = getSelectedPlacement();
+    const selectedSpace = getSelectedSpace();
+    
+    // Add the new product image to the current placement's placementImages array
+    if (selectedPlacement) {
+      // Calculate default position for the new image
+      const position = calculateNewProductImagePosition(selectedPlacement, backgroundImageSize);
+      
+      // Load image to get actual dimensions
+      const img = new Image();
+      img.onload = () => {
+        const newPlacementImage = {
+          ...productImage,
+          x: position.x,
+          y: position.y,
+          width: Math.min(img.naturalWidth, 200), // Cap at 200px width
+          height: Math.min(img.naturalHeight, 200), // Cap at 200px height
+          visible: true
+        };
+        
+        const updatedPlacement = {
+          ...selectedPlacement,
+          placementImages: [...(selectedPlacement.placementImages || []), newPlacementImage],
+          activeProductImageId: productImage.id // Set the new image as active
+        };
+        
+        // Update the placement in the scene
+        setScenes(prevScenes => prevScenes.map(scene => {
+          if (scene.id === currentSceneId) {
+            return {
+              ...scene,
+              spaces: scene.spaces.map(space => {
+                if (space.id === selectedSpace?.id) {
+                  return {
+                    ...space,
+                    placements: space.placements.map(placement => 
+                      placement.dbId === selectedPlacement.dbId ? updatedPlacement : placement
+                    )
+                  };
+                }
+                return space;
+              })
+            };
+          }
+          return scene;
+        }));
+
+        // Save position to database
+        updatePlacementImagePosition(productImage.id, position.x, position.y);
+        
+        // Set the new image as active in database
+        if (selectedSpace && selectedPlacement) {
+          setActivePlacementImage(selectedSpace.id, selectedPlacement.id, productImage.id);
+        }
+      };
+      
+      img.onerror = () => {
+        // Fallback to default dimensions if image fails to load
+        const newPlacementImage = {
+          ...productImage,
+          x: position.x,
+          y: position.y,
+          width: 100, // Default size
+          height: 100, // Default size
+          visible: true
+        };
+        
+        const updatedPlacement = {
+          ...selectedPlacement,
+          placementImages: [...(selectedPlacement.placementImages || []), newPlacementImage],
+          activeProductImageId: productImage.id // Set the new image as active
+        };
+        
+        // Update the placement in the scene
+        setScenes(prevScenes => prevScenes.map(scene => {
+          if (scene.id === currentSceneId) {
+            return {
+              ...scene,
+              spaces: scene.spaces.map(space => {
+                if (space.id === selectedSpace?.id) {
+                  return {
+                    ...space,
+                    placements: space.placements.map(placement => 
+                      placement.dbId === selectedPlacement.dbId ? updatedPlacement : placement
+                    )
+                  };
+                }
+                return space;
+              })
+            };
+          }
+          return scene;
+        }));
+
+        // Save position to database
+        updatePlacementImagePosition(productImage.id, position.x, position.y);
+        
+        // Set the new image as active in database
+        if (selectedSpace && selectedPlacement) {
+          setActivePlacementImage(selectedSpace.id, selectedPlacement.id, productImage.id);
+        }
+      };
+      
+      img.src = productImage.image.includes('http') ? productImage.image : generateS3Url(productImage.image);
+    }
+  }, [getSelectedPlacement, getSelectedSpace, currentSceneId, backgroundImageSize, updatePlacementImagePosition]);
+
+  // Handle product image creation
+  const handleProductImageSubmit = useCallback(async () => {
+    if (!productImageForm.name.trim() || !productImageForm.image || !selectedPlacementId) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      // Find the selected placement to get its database ID
+      const selectedPlacement = getSelectedPlacement();
+      if (!selectedPlacement || !selectedPlacement.dbId) {
+        alert('Please select a valid placement first');
+        return;
+      }
+
+      // Create placement image in database
+      const response = await fetch('/api/placement-images', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          placement_id: parseInt(selectedPlacement.dbId),
+          name: productImageForm.name.trim(),
+          image: productImageForm.image,
+          anchor_position: {},
+          position: {},
+          product_id: null
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Clear the form and close modal
+        setProductImageForm({ name: '', image: '' });
+        setShowAddProductImage(false);
+        
+        // Refresh placement images from database
+        fetchPlacementImages(selectedPlacement.dbId);
+      } else {
+        alert(`Failed to create product image: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Error creating product image:', error);
+      alert('Failed to create product image. Please try again.');
+    }
+  }, [productImageForm, selectedPlacementId, getSelectedPlacement]);
 
   // Calculate placement position for new products
   const calculateNewProductPosition = (placement: Placement, backgroundImageSize: { width: number; height: number }) => {
@@ -328,6 +745,27 @@ function DesignStudioContent() {
       y: lastProduct.y || backgroundImageSize.height / 2
     };
   };
+
+  // Calculate placement position for new placement images
+  const calculateNewProductImagePosition = (placement: Placement, backgroundImageSize: { width: number; height: number }) => {
+    const existingImages = placement.placementImages || [];
+    
+    if (existingImages.length === 0) {
+      // No existing images - place at center
+      return {
+        x: backgroundImageSize.width / 2,
+        y: backgroundImageSize.height / 2
+      };
+    }
+    
+    // Use the position of the last image, or center if no position
+    const lastImage = existingImages[existingImages.length - 1];
+    return {
+      x: lastImage.x || backgroundImageSize.width / 2,
+      y: lastImage.y || backgroundImageSize.height / 2
+    };
+  };
+
 
   // Product upload functions
   const handleFileInput = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -570,94 +1008,55 @@ function DesignStudioContent() {
     ));
   }, [currentSceneId]);
 
-  // Create new scene
-  const createScene = useCallback(async () => {
-    if (!newSceneName.trim()) return;
+  // Handle placement image position updates from drag
+  const handlePlacementImageDragEnd = useCallback((placementImage: any, x: number, y: number) => {
+    // Update placement image in scenes state
+    setScenes(prev => prev.map(scene =>
+      scene.id === currentSceneId
+        ? {
+            ...scene,
+            spaces: scene.spaces.map(space =>
+              space.id === placementImage.spaceId
+                ? {
+                    ...space,
+                    placements: space.placements.map(placement =>
+                      placement.id === placementImage.placementId
+                        ? {
+                            ...placement,
+                            placementImages: placement.placementImages?.map(img =>
+                              img.id === placementImage.placementImageId
+                                ? { ...img, x, y }
+                                : img
+                            ) || []
+                          }
+                        : placement
+                    )
+                  }
+                : space
+            )
+          }
+        : scene
+    ));
+
+    // Save position to database
+    updatePlacementImagePosition(placementImage.placementImageId, x, y);
+  }, [currentSceneId, updatePlacementImagePosition]);
+
+  // Handle scene created from modal
+  const handleSceneCreated = useCallback(async (baseScene: BaseScene) => {
+    // Close the modal
+    setShowCreateScene(false);
     
-    try {
-      const newScene: Scene = {
-        id: Date.now().toString(),
-        name: newSceneName.trim(),
-        backgroundImage: newSceneImage,
-        backgroundImageS3Key: newSceneImageS3Key,
-        backgroundImageSize: { width: 1200, height: 800 }, // Default size, will be updated when image loads
-        spaces: []
-      };
-      
-      // Add scene to state
-      const newScenes = [...scenes, newScene];
-      setScenes(newScenes);
-      setCurrentSceneId(newScene.id);
-      
-      // Save scene to file system
-      await fetch('/api/scenes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newScene),
-      });
-      
-      // Reset modal state
-      setShowCreateScene(false);
-      setNewSceneName('');
-      setNewSceneImage('');
-      setNewSceneImageS3Key('');
-      setSceneImageUploadProgress(0);
-    } catch (error) {
-      console.error('Error creating scene:', error);
+    // Store the scene name to track after refresh
+    setPendingSceneName(baseScene.name);
+    
+    // Refresh scenes from database to get the newly created scene
+    if (refreshScenes) {
+      await refreshScenes();
+      // The handleScenesLoaded callback will automatically set the current scene ID
+      // to the database ID based on the pending scene name
     }
-  }, [newSceneName, newSceneImage, newSceneImageS3Key, scenes]);
-
-  // Handle scene image upload
-  const handleSceneImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate file type and size
-    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
-      alert('Please upload a valid image file (JPEG, PNG, GIF, or WebP)');
-      return;
-    }
-
-    const maxSizeInMB = 10;
-    if (file.size > maxSizeInMB * 1024 * 1024) {
-      alert(`File size must be less than ${maxSizeInMB}MB`);
-      return;
-    }
-
-    setUploadingSceneImage(true);
-    setSceneImageUploadProgress(0);
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      // Generate a temporary scene ID for the upload path
-      const tempSceneId = `temp-scene-${Date.now()}`;
-      formData.append('sceneId', tempSceneId);
-
-      // Upload to S3
-      const response = await fetch('/api/upload-scene-background', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setNewSceneImage(data.data.url);
-        setNewSceneImageS3Key(data.data.key);
-        setSceneImageUploadProgress(100);
-      } else {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('Scene image upload failed:', errorData);
-        throw new Error(`Upload failed: ${errorData.error || 'Server error'}`);
-      }
-    } catch (error) {
-      console.error('Scene image upload failed:', error);
-      alert(`Failed to upload scene image: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`);
-    } finally {
-      setUploadingSceneImage(false);
-    }
-  }, []);
+  }, [refreshScenes]);
 
   // Set active product for placement (only one active at a time)
   const setActiveProduct = useCallback((spaceId: string, placementId: string, productId: string) => {
@@ -716,6 +1115,114 @@ function DesignStudioContent() {
     ));
   }, [currentSceneId]);
 
+  // Set active placement image for placement (only one active at a time)
+  const setActivePlacementImage = useCallback(async (spaceId: string, placementId: string, placementImageId: number) => {
+    // First update the local state
+    setScenes(prev => prev.map(scene =>
+      scene.id === currentSceneId
+        ? {
+            ...scene,
+            spaces: scene.spaces.map(space =>
+              space.id === spaceId
+                ? {
+                    ...space,
+                    placements: space.placements.map(placement =>
+                      placement.id === placementId
+                        ? { ...placement, activeProductImageId: placementImageId }
+                        : placement
+                    )
+                  }
+                : space
+            )
+          }
+        : scene
+    ));
+
+    // Find the placement to get its database ID
+    const currentScene = scenes.find(scene => scene.id === currentSceneId);
+    const currentSpace = currentScene?.spaces.find(space => space.id === spaceId);
+    const currentPlacement = currentSpace?.placements.find(placement => placement.id === placementId);
+
+    if (currentPlacement?.dbId) {
+      try {
+        const numericPlacementImageId = typeof placementImageId === 'string' ? parseInt(placementImageId) : placementImageId;
+        
+        // Update the database to mark this image as visible and others as not visible
+        const response = await fetch('/api/placement-images/set-active', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            placement_id: parseInt(currentPlacement.dbId),
+            active_placement_image_id: numericPlacementImageId
+          }),
+        });
+
+        const result = await response.json();
+        if (!result.success) {
+          console.error('Failed to set active placement image in database:', result.error);
+        }
+      } catch (error) {
+        console.error('Error setting active placement image in database:', error);
+      }
+    }
+  }, [currentSceneId, scenes]);
+
+  // Remove placement image
+  const removePlacementImage = useCallback(async (spaceId: string, placementId: string, placementImageId: number) => {
+    if (!confirm('Are you sure you want to remove this product image?')) {
+      return;
+    }
+
+    try {
+      // Delete from database
+      const response = await fetch(`/api/placement-images/${placementImageId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          // Remove from local state
+          setScenes(prev => prev.map(scene =>
+            scene.id === currentSceneId
+              ? {
+                  ...scene,
+                  spaces: scene.spaces.map(space =>
+                    space.id === spaceId
+                      ? {
+                          ...space,
+                          placements: space.placements.map(placement =>
+                            placement.id === placementId
+                              ? {
+                                  ...placement,
+                                  placementImages: placement.placementImages?.filter(img => img.id !== placementImageId) || [],
+                                  activeProductImageId: placement.activeProductImageId === placementImageId ? 
+                                    placement.placementImages?.find(img => img.id !== placementImageId)?.id : 
+                                    placement.activeProductImageId
+                                }
+                              : placement
+                          )
+                        }
+                      : space
+                  )
+                }
+              : scene
+          ));
+        } else {
+          alert(`Failed to remove product image: ${result.error}`);
+        }
+      } else {
+        const errorResult = await response.json().catch(() => ({ error: 'Server error' }));
+        alert(`Failed to remove product image: ${errorResult.error}`);
+      }
+    } catch (error) {
+      console.error('Error removing placement image:', error);
+      alert('Failed to remove product image. Please try again.');
+    }
+  }, [currentSceneId]);
+
   // Set stage size based on window dimensions, sidebar state, and background image
   useEffect(() => {
     const updateStageSize = () => {
@@ -762,99 +1269,142 @@ function DesignStudioContent() {
     return activeProducts;
   }, [placedProducts, currentSceneId, scenes]);
 
-  // Initialize with demo data
-  useEffect(() => {
-    const initializeScenes = async () => {
-      try {
-        // Load scenes from the new JSON structure
-        const response = await fetch('/api/scenes');
-        if (response.ok) {
-          const result = await response.json();
-          if (result.success && result.data.length > 0) {
-            const loadedScenes = result.data;            
-            setScenes(loadedScenes);
-            
-            // Extract placed products from scene data
-            const allPlacedProducts: PlacedProduct[] = [];
-            loadedScenes.forEach((scene: Scene) => {
-              scene.spaces?.forEach(space => {
-                space.placements?.forEach(placement => {
-                  placement.products.forEach(product => {
-                    if (product.x !== undefined && product.y !== undefined) {
-                      allPlacedProducts.push({
-                        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-                        productId: product.id,
-                        placementName: placement.name,
-                        spaceName: space.name,
-                        src: product.src,
-                        x: product.x,
-                        y: product.y,
-                        width: product.width,
-                        height: product.height,
-                        name: product.name,
-                        sceneId: scene.id,
-                        visible: product.visible,
-                      });
-                    }
-                  });
-                });
-              });
+  // Get current scene placed placement images for canvas
+  const getCurrentPlacedPlacementImages = useCallback(() => {
+    const currentScene = scenes.find(scene => scene.id === currentSceneId);
+    if (!currentScene) return [];
+
+    const activePlacementImages: any[] = [];
+    
+    currentScene.spaces?.forEach(space => {
+      space.placements?.forEach(placement => {
+        if (placement.activeProductImageId && placement.placementImages) {
+          const activeImage = placement.placementImages.find(img => img.id === placement.activeProductImageId);
+          if (activeImage && activeImage.x !== undefined && activeImage.y !== undefined) {
+            activePlacementImages.push({
+              id: `placement-image-${activeImage.id}`,
+              src: activeImage.image.includes('http') ? activeImage.image : generateS3Url(activeImage.image),
+              name: activeImage.name,
+              x: activeImage.x,
+              y: activeImage.y,
+              width: activeImage.width || 100,
+              height: activeImage.height || 100,
+              visible: activeImage.visible !== false,
+              placementImageId: activeImage.id,
+              placementId: placement.id,
+              spaceId: space.id
             });
-            setPlacedProducts(allPlacedProducts);
-            
-            // Set the current scene ID based on URL parameter or default to first scene
-            if (sceneIdParam && loadedScenes.find((scene: Scene) => scene.id === sceneIdParam)) {
-              setCurrentSceneId(sceneIdParam);
-            } else {
-              setCurrentSceneId(loadedScenes[0]?.id || '');
-            }
-          } else {
-            // Fallback to demo data if no scenes found
-            createDemoData();
           }
-        } else {
-          // Fallback to demo data if API fails
-          createDemoData();
         }
-      } catch (error) {
-        console.error('Failed to load scenes:', error);
-        // Fallback to demo data on error
-        createDemoData();
+      });
+    });
+
+    return activePlacementImages;
+  }, [currentSceneId, scenes]);
+
+  // Stable callback for refresh function
+  // Stable callback for scenes loaded
+  const handleScenesLoaded = useCallback((loadedScenes: Scene[]) => {
+    setScenes(loadedScenes);
+    
+    // If there's a pending scene name, find it by name and set as current (using dbId)
+    if (pendingSceneName) {
+      const newScene = loadedScenes.find(scene => scene.name === pendingSceneName);
+      if (newScene && newScene.dbId) {
+        setCurrentSceneId(newScene.dbId);
+        setPendingSceneName(null);
+        return;
       }
-    };
+    }
+    
+    // Set the current scene ID based on URL parameter or default to first scene (using dbId)
+    if (sceneIdParam && loadedScenes.find((scene: Scene) => scene.dbId === sceneIdParam)) {
+      setCurrentSceneId(sceneIdParam);
+    } else if (loadedScenes.length > 0 && !currentSceneId) {
+      // Always use dbId for database scenes
+      const firstSceneDbId = loadedScenes[0].dbId;
+      if (firstSceneDbId) {
+        setCurrentSceneId(firstSceneDbId);
+      }
+    }
+  }, [sceneIdParam, currentSceneId, pendingSceneName]);
 
-    const createDemoData = () => {
-      const demoScene: Scene = {
-        id: 'demo-scene-1',
-        name: 'Living Room Demo',
-        backgroundImage: '/living-room.jpg', // Use local image
-        backgroundImageSize: { width: 1920, height: 1080 },
-        spaces: [
-          {
-            id: 'space-1',
-            name: 'Furniture Area',
-            expanded: false,
-            visible: true,
-            placements: [
-              {
-                id: 'placement-1',
-                name: 'Sofa Placement',
-                expanded: false,
-                visible: true,
-                products: [],
-                activeProductId: undefined
-              }
-            ]
+  // Load themes on component mount - scenes are loaded by SceneManagementHeader
+  useEffect(() => {
+    loadThemes();
+  }, [loadThemes]);
+
+  // Fetch spaces when current scene changes
+  useEffect(() => {
+    if (currentSceneId && currentSceneId !== lastFetchedSceneRef.current) {
+      // Check if currentSceneId looks like a database ID (numeric string)
+      if (/^\d+$/.test(currentSceneId)) {
+        // currentSceneId is already a database ID
+        lastFetchedSceneRef.current = currentSceneId;
+        fetchSpacesForScene(currentSceneId);
+      } else {
+        // currentSceneId might be a frontend ID, need to find the scene
+        // Use functional update to get current scenes without adding dependency
+        setScenes(currentScenes => {
+          const currentScene = currentScenes.find(scene => scene.id === currentSceneId);
+          if (currentScene && currentScene.dbId && currentScene.dbId !== lastFetchedSceneRef.current) {
+            lastFetchedSceneRef.current = currentScene.dbId;
+            fetchSpacesForScene(currentScene.dbId);
           }
-        ]
-      };
-      
-      setScenes([demoScene]);
-      setCurrentSceneId(demoScene.id);
-    };
+          return currentScenes; // Return unchanged to not trigger re-render
+        });
+      }
+    }
+  }, [currentSceneId, fetchSpacesForScene]);
 
-    initializeScenes();
-  }, [sceneIdParam]);
+  // Fetch placements when current space changes
+  useEffect(() => {
+    if (selectedSpaceId && selectedSpaceId !== lastFetchedSpaceRef.current) {
+      // Check if selectedSpaceId looks like a database ID (numeric string)
+      if (/^\d+$/.test(selectedSpaceId)) {
+        // selectedSpaceId is already a database ID
+        lastFetchedSpaceRef.current = selectedSpaceId;
+        fetchPlacementsForSpace(selectedSpaceId);
+      } else {
+        // selectedSpaceId might be a frontend ID, need to find the space
+        // Use functional update to get current spaces without adding dependency
+        setScenes(currentScenes => {
+          for (const scene of currentScenes) {
+            const selectedSpace = scene.spaces.find(space => space.id === selectedSpaceId);
+            if (selectedSpace && selectedSpace.dbId && selectedSpace.dbId !== lastFetchedSpaceRef.current) {
+              lastFetchedSpaceRef.current = selectedSpace.dbId;
+              fetchPlacementsForSpace(selectedSpace.dbId);
+              break;
+            }
+          }
+          return currentScenes; // Return unchanged to not trigger re-render
+        });
+      }
+    }
+  }, [selectedSpaceId, fetchPlacementsForSpace]);
+
+  // Fetch placement images when current placement changes
+  useEffect(() => {
+    if (selectedPlacementId) {
+      // Find the selected placement to get its database ID
+      const selectedPlacement = getSelectedPlacement();
+      if (selectedPlacement && selectedPlacement.dbId) {
+        // Prevent duplicate API calls for the same placement
+        if (lastFetchedPlacementRef.current !== selectedPlacement.dbId) {
+          lastFetchedPlacementRef.current = selectedPlacement.dbId;
+          fetchPlacementImages(selectedPlacement.dbId);
+        }
+      }
+    } else {
+      // Reset when no placement is selected
+      lastFetchedPlacementRef.current = '';
+    }
+  }, [selectedPlacementId, getSelectedPlacement]);
+
+  // Stable callback for handling refresh function from SceneManagementHeader
+  const handleRefreshAvailable = useCallback((refreshFn: () => Promise<void>) => {
+    setRefreshScenes(() => refreshFn);
+  }, []);
 
   const currentScene = getCurrentScene();
 
@@ -865,61 +1415,24 @@ function DesignStudioContent() {
         sidebarCollapsed ? 'w-20' : 'w-96'
       }`}>
         {/* Scene Management Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white">
-          <div className="flex items-center space-x-3 flex-1">
-            {!sidebarCollapsed && (
-              <>                
-                <div className="flex-1 min-w-0">
-                  {currentScene ? (
-                    <div className="flex items-center space-x-2">
-                      <select 
-                        value={currentSceneId}
-                        onChange={(e) => setCurrentSceneId(e.target.value)}
-                        className="flex-1 p-2 text-sm border border-gray-200 rounded-md bg-white min-w-0"
-                      >
-                        {scenes.map(scene => (
-                          <option key={scene.id} value={scene.id}>
-                            {scene.name}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={() => {
-                          if (confirm('Delete this scene?')) {
-                            const updatedScenes = scenes.filter(s => s.id !== currentSceneId);
-                            setScenes(updatedScenes);
-                            if (updatedScenes.length > 0) {
-                              setCurrentSceneId(updatedScenes[0].id);
-                            }
-                          }
-                        }}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-md"
-                        title="Delete scene"
-                      >
-                        🗑
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="text-sm text-gray-500">No scenes</span>
-                  )}
-                </div>
-                <button
-                  onClick={() => setShowCreateScene(true)}
-                  className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 whitespace-nowrap"
-                  title="Create new scene"
-                >
-                  + Scene
-                </button>
-              </>
-            )}
-          </div>
-          <button
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 ml-2"
-          >
-            {sidebarCollapsed ? '→' : '←'}
-          </button>
-        </div>
+        <SceneManagementHeader
+          currentSceneId={currentSceneId}
+          onSceneChange={setCurrentSceneId}
+          onSceneDelete={(sceneId) => {
+            if (confirm('Delete this scene?')) {
+              const updatedScenes = scenes.filter(s => s.id !== sceneId);
+              setScenes(updatedScenes);
+              if (updatedScenes.length > 0) {
+                setCurrentSceneId(updatedScenes[0].id);
+              }
+            }
+          }}
+          onShowCreateScene={() => setShowCreateScene(true)}
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+          onScenesLoaded={handleScenesLoaded}
+          onRefreshAvailable={handleRefreshAvailable}
+        />
 
         {/* Sidebar Content */}
         <div className="flex flex-col" style={{ height: 'calc(100% - 80px)' }}>
@@ -938,39 +1451,13 @@ function DesignStudioContent() {
                     </button>
                   </div>
                   
-                  {/* Create Space Modal */}
-                  {showCreateSpace && (
-                    <div className="border border-gray-300 rounded-lg p-4 bg-gray-50">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={newSpaceName}
-                          onChange={(e) => setNewSpaceName(e.target.value)}
-                          placeholder="Enter space name..."
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
-                          onKeyPress={(e) => e.key === 'Enter' && createSpace()}
-                        />
-                        <button
-                          onClick={createSpace}
-                          className="px-3 py-2 bg-green-600 text-white rounded text-sm hover:bg-green-700"
-                        >
-                          Create
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowCreateSpace(false);
-                            setNewSpaceName('');
-                          }}
-                          className="px-3 py-2 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  
                   {/* Spaces List */}
-                  {getCurrentSceneSpaces().length === 0 ? (
+                  {loadingSpaces ? (
+                    <div className="text-center py-8">
+                      <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                      <p className="text-gray-500 text-sm mt-2">Loading spaces...</p>
+                    </div>
+                  ) : getCurrentSceneSpaces().length === 0 ? (
                     <p className="text-gray-500 text-center py-8 text-sm">
                       No spaces created yet. Create a space to start organizing your catalogue.
                     </p>
@@ -984,12 +1471,7 @@ function DesignStudioContent() {
                           }`}
                           onClick={() => setSelectedSpaceId(selectedSpaceId === space.id ? '' : space.id)}
                         >
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xs font-bold px-2 py-1 rounded ${
-                              selectedSpaceId === space.id ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'
-                            }`}>
-                              SPACE
-                            </span>
+                          <div className="flex items-center gap-2">                            
                             <span className="font-medium">{space.name}</span>
                           </div>
                         </div>
@@ -997,7 +1479,7 @@ function DesignStudioContent() {
                         {/* Selected Space: Show Placements Section */}
                         {selectedSpaceId === space.id && (
                           <div className="px-4 pb-4">
-                            <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center justify-between mb-3 mt-2">
                               <h4 className="font-medium text-gray-700">Placements</h4>
                               <button
                                 onClick={() => setShowCreatePlacement(true)}
@@ -1054,11 +1536,6 @@ function DesignStudioContent() {
                                     onClick={() => setSelectedPlacementId(selectedPlacementId === placement.id ? '' : placement.id)}
                                   >
                                     <div className="flex items-center gap-2">
-                                      <span className={`text-xs font-bold px-2 py-1 rounded ${
-                                        selectedPlacementId === placement.id ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700'
-                                      }`}>
-                                        PLACEMENT
-                                      </span>
                                       <span className="text-sm font-medium">{placement.name}</span>
                                     </div>
                                   </div>
@@ -1069,11 +1546,10 @@ function DesignStudioContent() {
                                       <div className="flex items-center justify-between mb-2">
                                         <h5 className="text-sm font-medium text-gray-600">Products</h5>
                                         <button
-                                          className="px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700 disabled:bg-gray-400"
-                                          disabled={isUploading}
-                                          onClick={triggerProductUpload}
+                                          className="px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700"
+                                          onClick={() => setShowAddProductImage(true)}
                                         >
-                                          {isUploading ? 'Uploading...' : 'Upload Product'}
+                                          Add Product Image
                                         </button>
                                       </div>
                                       
@@ -1082,35 +1558,33 @@ function DesignStudioContent() {
                                         <div className="mb-3 p-2 bg-blue-50 rounded text-xs text-blue-700">
                                           Uploading {uploadingProducts.length} product(s)...
                                         </div>
-                                      )}
+                                      )}                                                                            
                                       
-                                      {/* Products list */}
-                                      {placement.products.length > 0 ? (
+                                      {/* Placement Images List */}
+                                      {placement.placementImages && placement.placementImages.length > 0 ? (
                                         <div className="space-y-2 mb-3">
-                                          {placement.products.map((product) => {
-                                            const isActive = placement.activeProductId === product.id;
+                                          <h6 className="text-xs font-medium text-gray-600">Product Images</h6>
+                                          {placement.placementImages.map((placementImage) => {
+                                            const isActive = placement.activeProductImageId === placementImage.id;
                                             return (
                                               <div 
-                                                key={product.id} 
+                                                key={placementImage.id} 
                                                 className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-all ${
                                                   isActive 
                                                     ? 'bg-blue-100 border-2 border-blue-500' 
                                                     : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
                                                 }`}
-                                                onClick={() => setActiveProduct(space.id, placement.id, product.id)}
+                                                onClick={() => setActivePlacementImage(space.id, placement.id, placementImage.id)}
                                               >
                                                 <img 
-                                                  src={product.src} 
-                                                  alt={product.name}
+                                                  src={placementImage.image.includes('http') ? placementImage.image : generateS3Url(placementImage.image)} 
+                                                  alt={placementImage.name}
                                                   className="w-8 h-8 object-cover rounded"
-                                                  onError={(e) => {
-                                                    (e.target as HTMLImageElement).src = '/placeholder-image.png';
-                                                  }}
                                                 />
                                                 <div className="flex-1 min-w-0">
-                                                  <p className="text-xs font-medium text-gray-700 truncate">{product.name}</p>
+                                                  <p className="text-xs font-medium text-gray-700 truncate">{placementImage.name}</p>
                                                   <p className="text-xs text-gray-500">
-                                                    {product.width}x{product.height} • {isActive ? 'Active' : 'Inactive'}
+                                                    {placementImage.width || 100}x{placementImage.height || 100} • {isActive ? 'Active' : 'Inactive'}
                                                   </p>
                                                 </div>
                                                 <div className="flex items-center gap-1">
@@ -1122,10 +1596,10 @@ function DesignStudioContent() {
                                                   <button
                                                     onClick={(e) => {
                                                       e.stopPropagation();
-                                                      removeProduct(space.id, placement.id, product.id);
+                                                      removePlacementImage(space.id, placement.id, placementImage.id);
                                                     }}
                                                     className="text-red-600 hover:text-red-800 text-xs p-1 rounded hover:bg-red-50"
-                                                    title="Remove product"
+                                                    title="Remove placement image"
                                                   >
                                                     ❌
                                                   </button>
@@ -1135,11 +1609,11 @@ function DesignStudioContent() {
                                           })}
                                         </div>
                                       ) : (
-                                        <p className="text-xs text-gray-400 mb-3">No products uploaded yet</p>
+                                        <p className="text-xs text-gray-400 mb-3">No product images uploaded yet</p>
                                       )}
                                       
                                       <p className="text-xs text-gray-500">
-                                        {placement.products.length} products in this placement
+                                        {placement.products.length} products • {placement.placementImages?.length || 0} product images in this placement
                                       </p>
                                     </div>
                                   )}
@@ -1188,8 +1662,11 @@ function DesignStudioContent() {
                 ← Mobile View
               </Link>
               <div className="text-sm text-gray-500">
-                Placed: {getCurrentPlacedProducts().length} items
+                Placed: {getCurrentPlacedProducts().length + getCurrentPlacedPlacementImages().length} items
               </div>
+            </div>
+            <div className="flex items-center">
+              <SettingsDropdown onThemeManagement={() => setShowThemeManagement(true)} />
             </div>
           </div>
         </div>
@@ -1225,18 +1702,15 @@ function DesignStudioContent() {
                 className="absolute top-0 left-0"
               >
                 <Layer>
-                  {/* Scene Background - only render if backgroundImage exists */}
-                  {currentScene?.backgroundImage ? (
+                  {/* Space Background - only show selected space image */}
+                  {getSelectedSpace()?.image && (
                     <KonvaImageComponent
-                      src={currentScene.backgroundImage}
+                      src={getSelectedSpace()?.image || ''}
                       x={0}
                       y={0}
                       draggable={false}
                       onImageLoad={handleBackgroundImageLoad}
                     />
-                  ) : (
-                    /* Empty background placeholder */
-                    <></>
                   )}
                   
                   {/* Product Images */}
@@ -1245,6 +1719,15 @@ function DesignStudioContent() {
                       key={product.id}
                       product={product}
                       onDragEnd={handleProductDragEnd}
+                    />
+                  ))}
+                  
+                  {/* Placement Images */}
+                  {getCurrentPlacedPlacementImages().map((placementImage) => (
+                    <PlacementImageComponent
+                      key={placementImage.id}
+                      placementImage={placementImage}
+                      onDragEnd={handlePlacementImageDragEnd}
                     />
                   ))}
                 </Layer>
@@ -1264,6 +1747,15 @@ function DesignStudioContent() {
         </div>
       </div>
 
+      {/* Theme Management Modal */}
+      <ThemeManagementModal
+        isOpen={showThemeManagement}
+        onClose={() => setShowThemeManagement(false)}
+        themes={themes}
+        onCreateTheme={handleCreateTheme}
+        onDeleteTheme={handleDeleteTheme}
+      />
+
       {/* Hidden file input for product uploads */}
       <input
         ref={fileInputRef}
@@ -1275,99 +1767,28 @@ function DesignStudioContent() {
       />
 
       {/* Create Scene Modal */}
-      {showCreateScene && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <h2 className="text-xl font-bold mb-4">Create New Scene</h2>
-            
-            <div className="space-y-4">
-              {/* Scene Name Input */}
-              <div>
-                <label htmlFor="sceneName" className="block text-sm font-medium text-gray-700 mb-1">
-                  Scene Name
-                </label>
-                <input
-                  id="sceneName"
-                  type="text"
-                  value={newSceneName}
-                  onChange={(e) => setNewSceneName(e.target.value)}
-                  placeholder="Enter scene name..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              
-              {/* Scene Background Image Upload */}
-              <div>
-                <label htmlFor="sceneImage" className="block text-sm font-medium text-gray-700 mb-1">
-                  Background Image
-                </label>
-                <div className="flex items-center space-x-3">
-                  <button
-                    onClick={() => document.getElementById('sceneImageUpload')?.click()}
-                    disabled={uploadingSceneImage}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50 text-sm"
-                  >
-                    {uploadingSceneImage ? 'Uploading...' : 'Choose Image'}
-                  </button>
-                  {uploadingSceneImage && (
-                    <div className="flex-1">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${sceneImageUploadProgress}%` }}
-                        />
-                      </div>
-                      <span className="text-xs text-gray-500 mt-1">{sceneImageUploadProgress}%</span>
-                    </div>
-                  )}
-                </div>
-                
-                {/* Scene Image Preview */}
-                {newSceneImage && (
-                  <div className="mt-3">
-                    <img
-                      src={newSceneImage}
-                      alt="Scene preview"
-                      className="w-full h-32 object-cover rounded-md border border-gray-300"
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            {/* Modal Actions */}
-            <div className="flex justify-end space-x-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowCreateScene(false);
-                  setNewSceneName('');
-                  setNewSceneImage('');
-                  setNewSceneImageS3Key('');
-                  setSceneImageUploadProgress(0);
-                }}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={createScene}
-                disabled={!newSceneName.trim() || uploadingSceneImage}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Create Scene
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CreateSceneModal
+        isOpen={showCreateScene}
+        onClose={() => setShowCreateScene(false)}
+        onSceneCreated={handleSceneCreated}
+      />
 
-      {/* Hidden file input for scene image upload */}
-      <input
-        id="sceneImageUpload"
-        type="file"
-        accept="image/*"
-        onChange={handleSceneImageUpload}
-        className="hidden"
+      {/* Create Space Modal */}
+      <CreateSpaceModal
+        isOpen={showCreateSpace}
+        onClose={() => setShowCreateSpace(false)}
+        onSpaceCreated={handleSpaceCreated}
+        currentSceneId={currentSceneId}
+        currentSceneDbId={getCurrentScene()?.dbId}
+      />
+      
+      {/* Add Product Image Modal */}
+      <AddProductImageModal
+        isOpen={showAddProductImage}
+        onClose={() => setShowAddProductImage(false)}
+        onProductImageCreated={handleProductImageCreated}
+        placementId={getSelectedPlacement()?.dbId || ''}
+        sceneId={currentSceneId}
       />
     </div>
   );

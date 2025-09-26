@@ -1,93 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { query } from '@/lib/database';
+import { s3KeyToUrl } from '@/lib/s3-utils';
 
-const SCENES_DIR = path.join(process.cwd(), 'public', 'scenes');
-const SCENE_CONFIG_PATH = path.join(process.cwd(), 'public', 'sceneConfig.json');
-
-interface SceneConfig {
-  scenes: Array<{
-    index: number;
-    id: string;
-    name: string;
-    file: string;
-  }>;
-}
-
-interface SceneFile {
-  id: string;
-  name: string;
-  backgroundImage: string;
-  backgroundImageSize: { width: number; height: number };
-  backgroundImageS3Key?: string;
-  placements: Array<{
-    id: string;
-    name: string;
-    expanded: boolean;
-    visible: boolean;
-    images: Array<{
-      id: string;
-      name: string;
-      src: string;
-      s3Key: string;
-      visible: boolean;
-      width: number;
-      height: number;
-      x: number;
-      y: number;
-    }>;
-  }>;
-}
-
-// PUT - Update existing scene
-export async function PUT(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  try {
-    const params = await context.params;
-    const sceneId = params.id;
-    const sceneData: SceneFile = await request.json();
-    
-    // Read current config to find the scene file
-    const configData = await fs.readFile(SCENE_CONFIG_PATH, 'utf-8');
-    const config: SceneConfig = JSON.parse(configData);
-    
-    const sceneInfo = config.scenes.find(s => s.id === sceneId);
-    if (!sceneInfo) {
-      return NextResponse.json(
-        { success: false, error: 'Scene not found' },
-        { status: 404 }
-      );
-    }
-    
-    const sceneFilePath = path.join(SCENES_DIR, sceneInfo.file);
-    
-    // Update scene file
-    await fs.writeFile(sceneFilePath, JSON.stringify(sceneData, null, 2));
-    
-    // Update config if scene name changed
-    if (sceneData.name !== sceneInfo.name) {
-      const updatedConfig = {
-        ...config,
-        scenes: config.scenes.map(s =>
-          s.id === sceneId ? { ...s, name: sceneData.name } : s
-        )
-      };
-      await fs.writeFile(SCENE_CONFIG_PATH, JSON.stringify(updatedConfig, null, 2));
-    }
-    
-    return NextResponse.json({ success: true, data: sceneData });
-  } catch (error) {
-    console.error('Failed to update scene:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to update scene' },
-      { status: 500 }
-    );
-  }
-}
-
-// DELETE - Delete scene
+// DELETE - Delete scene from database only
 export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -96,45 +11,49 @@ export async function DELETE(
     const params = await context.params;
     const sceneId = params.id;
     
-    // Read current config
-    const configData = await fs.readFile(SCENE_CONFIG_PATH, 'utf-8');
-    const config: SceneConfig = JSON.parse(configData);
-    
-    const sceneInfo = config.scenes.find(s => s.id === sceneId);
-    if (!sceneInfo) {
+    // Parse scene ID - should be numeric for database
+    const isNumeric = !isNaN(parseInt(sceneId));
+    if (!isNumeric) {
       return NextResponse.json(
-        { success: false, error: 'Scene not found' },
+        { success: false, error: 'Invalid scene ID format' },
+        { status: 400 }
+      );
+    }
+    
+    const numericSceneId = parseInt(sceneId);
+    
+    // Check if scene exists in database
+    const sceneResult = await query(
+      'SELECT id, name FROM scenes WHERE id = $1',
+      [numericSceneId]
+    );
+    
+    if (sceneResult.rows.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Scene not found in database' },
         { status: 404 }
       );
     }
     
-    // Delete scene file
-    const sceneFilePath = path.join(SCENES_DIR, sceneInfo.file);
-    try {
-      await fs.unlink(sceneFilePath);
-    } catch (error) {
-      console.warn(`Failed to delete scene file ${sceneInfo.file}:`, error);
-    }
+    const scene = sceneResult.rows[0];
     
-    // Update config to remove scene
-    const updatedConfig = {
-      ...config,
-      scenes: config.scenes.filter(s => s.id !== sceneId)
-    };
+    // Delete from database (CASCADE will handle related spaces, placements, etc.)
+    await query('DELETE FROM scenes WHERE id = $1', [numericSceneId]);
     
-    await fs.writeFile(SCENE_CONFIG_PATH, JSON.stringify(updatedConfig, null, 2));
-    
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ 
+      success: true,
+      message: `Scene "${scene.name}" deleted successfully from database`
+    });
   } catch (error) {
-    console.error('Failed to delete scene:', error);
+    console.error('Failed to delete scene from database:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to delete scene' },
+      { success: false, error: 'Failed to delete scene from database' },
       { status: 500 }
     );
   }
 }
 
-// GET - Get specific scene
+// GET - Get specific scene from database
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -143,28 +62,52 @@ export async function GET(
     const params = await context.params;
     const sceneId = params.id;
     
-    // Read current config
-    const configData = await fs.readFile(SCENE_CONFIG_PATH, 'utf-8');
-    const config: SceneConfig = JSON.parse(configData);
-    
-    const sceneInfo = config.scenes.find(s => s.id === sceneId);
-    if (!sceneInfo) {
+    // Parse scene ID - should be numeric for database
+    const isNumeric = !isNaN(parseInt(sceneId));
+    if (!isNumeric) {
       return NextResponse.json(
-        { success: false, error: 'Scene not found' },
+        { success: false, error: 'Invalid scene ID format' },
+        { status: 400 }
+      );
+    }
+    
+    const numericSceneId = parseInt(sceneId);
+    
+    // Get scene from database
+    const result = await query(
+      `SELECT id, name, type, image, theme_id, created_at, updated_at 
+       FROM scenes 
+       WHERE id = $1`,
+      [numericSceneId]
+    );
+    
+    if (result.rows.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Scene not found in database' },
         { status: 404 }
       );
     }
     
-    // Read scene file
-    const sceneFilePath = path.join(SCENES_DIR, sceneInfo.file);
-    const sceneData = await fs.readFile(sceneFilePath, 'utf-8');
-    const scene: SceneFile = JSON.parse(sceneData);
+    const dbScene = result.rows[0];
+    
+    // Convert to frontend format
+    const scene = {
+      id: dbScene.id.toString(),
+      name: dbScene.name,
+      type: dbScene.type || undefined,
+      backgroundImage: dbScene.image ? s3KeyToUrl(dbScene.image) : '',
+      backgroundImageSize: { width: 1920, height: 1080 },
+      backgroundImageS3Key: dbScene.image || undefined,
+      theme_id: dbScene.theme_id,
+      dbId: dbScene.id.toString(),
+      spaces: [] // Empty for now
+    };
     
     return NextResponse.json({ success: true, data: scene });
   } catch (error) {
-    console.error('Failed to get scene:', error);
+    console.error('Failed to get scene from database:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to get scene' },
+      { success: false, error: 'Failed to get scene from database' },
       { status: 500 }
     );
   }
