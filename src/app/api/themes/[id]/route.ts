@@ -3,7 +3,7 @@ import { query, testConnection } from '@/lib/database';
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Test database connection
@@ -15,7 +15,8 @@ export async function DELETE(
       );
     }
 
-    const themeId = parseInt(params.id);
+    const resolvedParams = await params;
+    const themeId = parseInt(resolvedParams.id);
 
     // Validate theme ID
     if (isNaN(themeId) || themeId <= 0) {
@@ -89,7 +90,7 @@ export async function DELETE(
 // Optional: Add GET endpoint for fetching a single theme by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Test database connection
@@ -101,7 +102,8 @@ export async function GET(
       );
     }
 
-    const themeId = parseInt(params.id);
+    const resolvedParams = await params;
+    const themeId = parseInt(resolvedParams.id);
 
     // Validate theme ID
     if (isNaN(themeId) || themeId <= 0) {
