@@ -169,7 +169,7 @@ const StaticHUD: React.FC<StaticHUDProps> = () => {
   ];
 
   return (
-    <div className="fixed inset-0 z-30 pointer-events-none font-belleza">
+    <div className="fixed inset-0 z-20 pointer-events-none font-belleza">
       {/* Top Header */}
       <div className="absolute left-0 right-0 bg-gradient-to-b from-black to-transparent px-6 py-4 pointer-events-auto">
         <div className="flex items-center justify-between mb-4">
