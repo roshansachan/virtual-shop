@@ -451,8 +451,8 @@ function DesignStudioContent() {
                   image: dbImage.image,
                   x: dbImage.position?.x || 0,
                   y: dbImage.position?.y || 0,
-                  width: img.naturalWidth > 0 ? Math.min(img.naturalWidth, 200) : 100, // Cap at 200px width
-                  height: img.naturalHeight > 0 ? Math.min(img.naturalHeight, 200) : 100, // Cap at 200px height
+                  width: img.naturalWidth > 0 ? img.naturalWidth : 100, // Use original width
+                  height: img.naturalHeight > 0 ? img.naturalHeight : 100, // Use original height
                   visible: true,
                   product_id: dbImage.product_id // Include product_id from database
                 });
@@ -594,8 +594,8 @@ function DesignStudioContent() {
           ...productImage,
           x: position.x,
           y: position.y,
-          width: Math.min(img.naturalWidth, 200), // Cap at 200px width
-          height: Math.min(img.naturalHeight, 200), // Cap at 200px height
+          width: img.naturalWidth, // Use original width
+          height: img.naturalHeight, // Use original height
           visible: true
         };
         
