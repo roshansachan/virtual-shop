@@ -108,7 +108,7 @@ const StaticHUD: React.FC<StaticHUDProps> = () => {
   const [showLeftPanel, setShowLeftPanel] = useState(false);
   const [showBottomSheet, setShowBottomSheet] = useState(false);
 
-  const rooms = ['BedRoom', 'Living Room', 'Bathroom'];
+  const spaces = ['BedRoom', 'Living Room', 'Bathroom'];
   const timeOfDay = [
     { key: 'sunrise', label: 'Sunrise', icon: Sunrise },
     { key: 'day', label: 'Day', icon: Sun },
@@ -207,7 +207,7 @@ const StaticHUD: React.FC<StaticHUDProps> = () => {
           </button>
           
           <div className="flex items-center gap-6">
-            {rooms.map((room) => (
+            {spaces.map((room) => (
               <button
                 key={room}
                 onClick={() => setSelectedRoom(room)}

@@ -94,7 +94,7 @@ export async function PUT(
 
     // Parse request body
     const body = await request.json();
-    const { name, is_visible, position, anchor_position } = body;
+    const { name, image, is_visible, position, anchor_position, product_id } = body;
 
     // Build update query dynamically
     const updateFields = [];
@@ -104,6 +104,12 @@ export async function PUT(
     if (name !== undefined) {
       updateFields.push(`name = $${paramIndex}`);
       updateValues.push(name);
+      paramIndex++;
+    }
+
+    if (image !== undefined) {
+      updateFields.push(`image = $${paramIndex}`);
+      updateValues.push(image);
       paramIndex++;
     }
 
@@ -122,6 +128,12 @@ export async function PUT(
     if (anchor_position !== undefined) {
       updateFields.push(`anchor_position = $${paramIndex}`);
       updateValues.push(JSON.stringify(anchor_position));
+      paramIndex++;
+    }
+
+    if (product_id !== undefined) {
+      updateFields.push(`product_id = $${paramIndex}`);
+      updateValues.push(product_id);
       paramIndex++;
     }
 

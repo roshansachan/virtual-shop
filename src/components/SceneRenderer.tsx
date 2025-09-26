@@ -59,14 +59,33 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   /**
-   * Loads scene configuration from filesystem
+   * Loads scene configuration from filesystem or database
    */
   const loadScene = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
 
-      // First load the scene config index
+      // If sceneId is provided, fetch comprehensive data from database
+      if (sceneId && /^\d+$/.test(sceneId)) {
+        console.log('Fetching comprehensive scene data for sceneId:', sceneId);
+        
+        const comprehensiveResponse = await fetch(`/api/scenes/${sceneId}/comprehensive`);
+        if (comprehensiveResponse.ok) {
+          const comprehensiveData = await comprehensiveResponse.json();
+          if (comprehensiveData.success) {
+            console.log('Comprehensive Scene Data from Database:', comprehensiveData.data);
+            // TODO: Transform this data into the Scene format expected by SceneRenderer
+            // For now, we'll fall back to filesystem loading
+          } else {
+            console.error('Failed to fetch comprehensive scene data:', comprehensiveData.error);
+          }
+        } else {
+          console.error('Comprehensive API call failed:', comprehensiveResponse.status);
+        }
+      }
+
+      // First load the scene config index (filesystem fallback)
       const configResponse = await fetch('/sceneConfig.json')
       if (!configResponse.ok) {
         throw new Error('Failed to load scene configuration')

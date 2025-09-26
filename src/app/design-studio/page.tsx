@@ -236,6 +236,13 @@ function DesignStudioContent() {
   const [showSceneMenu, setShowSceneMenu] = useState(false);
   const [showCreateScene, setShowCreateScene] = useState(false);
   const [showAddProductImage, setShowAddProductImage] = useState(false);
+  const [showEditProductImage, setShowEditProductImage] = useState(false);
+  const [editingPlacementImage, setEditingPlacementImage] = useState<{
+    id: number;
+    name: string;
+    image: string;
+    product_id?: number | null;
+  } | null>(null);
   const [productImageForm, setProductImageForm] = useState({ name: '', image: '' });
   
   // Product upload state
@@ -446,7 +453,8 @@ function DesignStudioContent() {
                   y: dbImage.position?.y || 0,
                   width: img.naturalWidth > 0 ? Math.min(img.naturalWidth, 200) : 100, // Cap at 200px width
                   height: img.naturalHeight > 0 ? Math.min(img.naturalHeight, 200) : 100, // Cap at 200px height
-                  visible: true
+                  visible: true,
+                  product_id: dbImage.product_id // Include product_id from database
                 });
               };
               img.onerror = () => {
@@ -459,7 +467,8 @@ function DesignStudioContent() {
                   y: dbImage.position?.y || 0,
                   width: 100,
                   height: 100,
-                  visible: true
+                  visible: true,
+                  product_id: dbImage.product_id // Include product_id from database
                 });
               };
               img.src = dbImage.image.includes('http') ? dbImage.image : generateS3Url(dbImage.image);
@@ -725,6 +734,30 @@ function DesignStudioContent() {
       alert('Failed to create product image. Please try again.');
     }
   }, [productImageForm, selectedPlacementId, getSelectedPlacement]);
+
+  // Handle edit placement image
+  const handleEditPlacementImage = useCallback((placementImage: any) => {
+    setEditingPlacementImage({
+      id: placementImage.id,
+      name: placementImage.name,
+      image: placementImage.image,
+      product_id: placementImage.product_id || null
+    });
+    setShowEditProductImage(true);
+  }, []);
+
+  // Handle edit completion (same handler as create since modal handles both)
+  const handleProductImageUpdated = useCallback((updatedImage: { id: number; name: string; image: string }) => {
+    // Close edit modal and refresh placement images
+    setShowEditProductImage(false);
+    setEditingPlacementImage(null);
+    
+    // Refresh placement images from database
+    const selectedPlacement = getSelectedPlacement();
+    if (selectedPlacement && selectedPlacement.dbId) {
+      fetchPlacementImages(selectedPlacement.dbId);
+    }
+  }, [getSelectedPlacement, fetchPlacementImages]);
 
   // Calculate placement position for new products
   const calculateNewProductPosition = (placement: Placement, backgroundImageSize: { width: number; height: number }) => {
@@ -1250,57 +1283,61 @@ function DesignStudioContent() {
     const currentScene = scenes.find(scene => scene.id === currentSceneId);
     if (!currentScene) return [];
 
+    // Only get products from the currently selected space
+    const selectedSpace = currentScene.spaces?.find(space => space.id === selectedSpaceId);
+    if (!selectedSpace) return [];
+
     const activeProducts: PlacedProduct[] = [];
     
-    currentScene.spaces?.forEach(space => {
-      space.placements?.forEach(placement => {
-        if (placement.activeProductId) {
-          const activeProduct = placement.products.find(p => p.id === placement.activeProductId);
-          if (activeProduct && activeProduct.x !== undefined && activeProduct.y !== undefined) {
-            const placedProduct = placedProducts.find(pp => pp.productId === activeProduct.id);
-            if (placedProduct) {
-              activeProducts.push(placedProduct);
-            }
+    selectedSpace.placements?.forEach(placement => {
+      if (placement.activeProductId) {
+        const activeProduct = placement.products.find(p => p.id === placement.activeProductId);
+        if (activeProduct && activeProduct.x !== undefined && activeProduct.y !== undefined) {
+          const placedProduct = placedProducts.find(pp => pp.productId === activeProduct.id);
+          if (placedProduct) {
+            activeProducts.push(placedProduct);
           }
         }
-      });
+      }
     });
 
     return activeProducts;
-  }, [placedProducts, currentSceneId, scenes]);
+  }, [placedProducts, currentSceneId, scenes, selectedSpaceId]);
 
   // Get current scene placed placement images for canvas
   const getCurrentPlacedPlacementImages = useCallback(() => {
     const currentScene = scenes.find(scene => scene.id === currentSceneId);
     if (!currentScene) return [];
 
+    // Only get placement images from the currently selected space
+    const selectedSpace = currentScene.spaces?.find(space => space.id === selectedSpaceId);
+    if (!selectedSpace) return [];
+
     const activePlacementImages: any[] = [];
     
-    currentScene.spaces?.forEach(space => {
-      space.placements?.forEach(placement => {
-        if (placement.activeProductImageId && placement.placementImages) {
-          const activeImage = placement.placementImages.find(img => img.id === placement.activeProductImageId);
-          if (activeImage && activeImage.x !== undefined && activeImage.y !== undefined) {
-            activePlacementImages.push({
-              id: `placement-image-${activeImage.id}`,
-              src: activeImage.image.includes('http') ? activeImage.image : generateS3Url(activeImage.image),
-              name: activeImage.name,
-              x: activeImage.x,
-              y: activeImage.y,
-              width: activeImage.width || 100,
-              height: activeImage.height || 100,
-              visible: activeImage.visible !== false,
-              placementImageId: activeImage.id,
-              placementId: placement.id,
-              spaceId: space.id
-            });
-          }
+    selectedSpace.placements?.forEach(placement => {
+      if (placement.activeProductImageId && placement.placementImages) {
+        const activeImage = placement.placementImages.find(img => img.id === placement.activeProductImageId);
+        if (activeImage && activeImage.x !== undefined && activeImage.y !== undefined) {
+          activePlacementImages.push({
+            id: `placement-image-${activeImage.id}`,
+            src: activeImage.image.includes('http') ? activeImage.image : generateS3Url(activeImage.image),
+            name: activeImage.name,
+            x: activeImage.x,
+            y: activeImage.y,
+            width: activeImage.width || 100,
+            height: activeImage.height || 100,
+            visible: activeImage.visible !== false,
+            placementImageId: activeImage.id,
+            placementId: placement.id,
+            spaceId: selectedSpace.id
+          });
         }
-      });
+      }
     });
 
     return activePlacementImages;
-  }, [currentSceneId, scenes]);
+  }, [currentSceneId, scenes, selectedSpaceId]);
 
   // Stable callback for refresh function
   // Stable callback for scenes loaded
@@ -1596,6 +1633,16 @@ function DesignStudioContent() {
                                                   <button
                                                     onClick={(e) => {
                                                       e.stopPropagation();
+                                                      handleEditPlacementImage(placementImage);
+                                                    }}
+                                                    className="text-blue-600 hover:text-blue-800 text-xs p-1 rounded hover:bg-blue-50"
+                                                    title="Edit placement image"
+                                                  >
+                                                    ✏️
+                                                  </button>
+                                                  <button
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
                                                       removePlacementImage(space.id, placement.id, placementImage.id);
                                                     }}
                                                     className="text-red-600 hover:text-red-800 text-xs p-1 rounded hover:bg-red-50"
@@ -1610,11 +1657,7 @@ function DesignStudioContent() {
                                         </div>
                                       ) : (
                                         <p className="text-xs text-gray-400 mb-3">No product images uploaded yet</p>
-                                      )}
-                                      
-                                      <p className="text-xs text-gray-500">
-                                        {placement.products.length} products • {placement.placementImages?.length || 0} product images in this placement
-                                      </p>
+                                      )}                                                                          
                                     </div>
                                   )}
                                 </div>
@@ -1789,6 +1832,20 @@ function DesignStudioContent() {
         onProductImageCreated={handleProductImageCreated}
         placementId={getSelectedPlacement()?.dbId || ''}
         sceneId={currentSceneId}
+      />
+
+      {/* Edit Product Image Modal */}
+      <AddProductImageModal
+        isOpen={showEditProductImage}
+        onClose={() => {
+          setShowEditProductImage(false);
+          setEditingPlacementImage(null);
+        }}
+        onProductImageCreated={handleProductImageUpdated}
+        placementId={getSelectedPlacement()?.dbId || ''}
+        sceneId={currentSceneId}
+        editMode={true}
+        existingPlacementImage={editingPlacementImage}
       />
     </div>
   );

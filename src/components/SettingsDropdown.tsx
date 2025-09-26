@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import Link from 'next/link';
 
 interface SettingsDropdownProps {
   onThemeManagement: () => void;
@@ -53,6 +54,13 @@ export default function SettingsDropdown({ onThemeManagement }: SettingsDropdown
             >
               Theme Management
             </button>
+            <Link
+              href="/product-management"
+              onClick={() => setIsOpen(false)}
+              className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              Product Management
+            </Link>
             {/* Add more menu items here in the future */}
           </div>
         </div>
