@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
         updated_at
       FROM placements
     `;
-    let queryParams: any[] = [];
+    const queryParams: any[] = [];
 
     if (spaceId) {
       queryText += ' WHERE space_id = $1';

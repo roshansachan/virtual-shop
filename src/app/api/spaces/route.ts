@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
         updated_at
       FROM spaces
     `;
-    let queryParams: any[] = [];
+    const queryParams: any[] = [];
 
     if (sceneId) {
       queryText += ' WHERE scene_id = $1';

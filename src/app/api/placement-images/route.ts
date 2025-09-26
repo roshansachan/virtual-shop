@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
         updated_at
       FROM placement_images
     `;
-    let queryParams: any[] = [];
+    const queryParams: any[] = [];
 
     if (placementId) {
       queryText += ' WHERE placement_id = $1';
