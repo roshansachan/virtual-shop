@@ -126,3 +126,30 @@ export interface PlacedProduct {
   sceneId: string;
   visible: boolean;
 }
+
+// Space configuration as returned by the spaces/[id] API
+export interface SpaceConfig {
+  id: string;
+  name: string;
+  image?: string;
+  backgroundImage?: string;
+  backgroundImageSize?: { width: number; height: number };
+  backgroundImageS3Key?: string;
+  placements: Array<{
+    id: string;
+    name: string;
+    expanded: boolean;
+    visible: boolean;
+    products: Array<{
+      id: string;
+      name: string;
+      src: string;
+      s3Key: string;
+      visible: boolean;
+      width: number;
+      height: number;
+      x: number;
+      y: number;
+    }>;
+  }>;
+}

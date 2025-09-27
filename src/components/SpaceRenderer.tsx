@@ -2,9 +2,11 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import Image from 'next/image'
+import ImageSelectionDrawer from './ImageSelectionDrawer'
+import type { SpaceConfig } from '@/types/index'
 
-// Types for the filesystem-based configuration
-interface PlacementProductImage {
+// Types for the space-based configuration
+interface ProductImage {
   id: string
   name: string
   src: string
@@ -21,35 +23,16 @@ interface Placement {
   name: string
   expanded: boolean
   visible: boolean
-  images: PlacementProductImage[]
+  products: ProductImage[]
 }
 
-interface Scene {
-  id: string
-  name: string
-  backgroundImage: string
-  backgroundImageSize: { width: number; height: number }
-  backgroundImageS3Key?: string
-  placements: Placement[]
-}
-
-interface SceneConfig {
-  scenes: Array<{
-    index: number
-    id: string
-    name: string
-    file: string
-  }>
-}
-
-interface SceneRendererProps {
-  sceneId?: string
-  sceneIndex?: number
+interface SpaceRendererProps {
+  spaceId?: string
   hideIndicators?: boolean
 }
 
-export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = false }: SceneRendererProps) {
-  const [scene, setScene] = useState<Scene | null>(null)
+export default function SpaceRenderer({ spaceId, hideIndicators = false }: SpaceRendererProps) {
+  const [space, setSpace] = useState<SpaceConfig | null>(null)
   const [scale, setScale] = useState(1)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -59,69 +42,92 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   /**
-   * Loads scene configuration from filesystem or database
+   * Gets the actual dimensions of an image by loading it
    */
-  const loadScene = useCallback(async () => {
+  const getImageDimensions = useCallback((src: string): Promise<{ width: number; height: number }> => {
+    return new Promise((resolve, reject) => {
+      const img = document.createElement('img')
+      img.onload = () => {
+        resolve({ width: img.naturalWidth, height: img.naturalHeight })
+      }
+      img.onerror = reject
+      img.src = src
+    })
+  }, [])
+
+  /**
+   * Gets actual dimensions for all product images in placements
+   */
+  const getAllProductDimensions = useCallback(async (placements: Placement[]): Promise<void> => {
+    const dimensionPromises = placements.flatMap(placement =>
+      placement.products.map(async (product) => {
+        try {
+          const actualDimensions = await getImageDimensions(product.src)
+          product.width = actualDimensions.width
+          product.height = actualDimensions.height
+          console.log(`Actual dimensions for ${product.name}:`, actualDimensions)
+        } catch (error) {
+          console.error(`Failed to get dimensions for ${product.name}:`, error)
+          // Keep existing dimensions if loading fails
+        }
+      })
+    )
+    await Promise.all(dimensionPromises)
+  }, [getImageDimensions])
+
+  /**
+   * Loads space configuration from the database API and gets actual image dimensions
+   */
+  const loadSpace = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
 
-      // If sceneId is provided, fetch comprehensive data from database
-      if (sceneId && /^\d+$/.test(sceneId)) {
-        console.log('Fetching comprehensive scene data for sceneId:', sceneId);
-        
-        const comprehensiveResponse = await fetch(`/api/scenes/${sceneId}/comprehensive`);
-        if (comprehensiveResponse.ok) {
-          const comprehensiveData = await comprehensiveResponse.json();
-          if (comprehensiveData.success) {
-            console.log('Comprehensive Scene Data from Database:', comprehensiveData.data);
-            // TODO: Transform this data into the Scene format expected by SceneRenderer
-            // For now, we'll fall back to filesystem loading
-          } else {
-            console.error('Failed to fetch comprehensive scene data:', comprehensiveData.error);
+      if (!spaceId) {
+        throw new Error('Space ID is required')
+      }
+
+      console.log('Fetching space data for spaceId:', spaceId);
+
+      const response = await fetch(`/api/spaces/${spaceId}`);
+      if (!response.ok) {
+        throw new Error(`Failed to load space: ${response.status}`)
+      }
+
+      const spaceDataRes = await response.json()
+      console.log('Space Data:', spaceDataRes);
+
+      const spaceData = spaceDataRes.data
+
+      // Get actual background image dimensions
+      if (spaceData.backgroundImage || spaceData.image) {
+        const backgroundSrc = spaceData.backgroundImage || spaceData.image
+        try {
+          const actualDimensions = await getImageDimensions(backgroundSrc)
+          spaceData.backgroundImageSize = actualDimensions
+          console.log('Actual background image dimensions:', actualDimensions)
+        } catch (error) {
+          console.error('Failed to get background image dimensions:', error)
+          // Keep existing dimensions if available, or use defaults
+          if (!spaceData.backgroundImageSize) {
+            spaceData.backgroundImageSize = { width: 1920, height: 1080 }
           }
-        } else {
-          console.error('Comprehensive API call failed:', comprehensiveResponse.status);
         }
       }
 
-      // First load the scene config index (filesystem fallback)
-      const configResponse = await fetch('/sceneConfig.json')
-      if (!configResponse.ok) {
-        throw new Error('Failed to load scene configuration')
-      }
-      const config: SceneConfig = await configResponse.json()
-
-      // Find the scene to load
-      let sceneToLoad = null
-      if (sceneId) {
-        sceneToLoad = config.scenes.find(s => s.id === sceneId)
-      } else if (sceneIndex !== undefined) {
-        sceneToLoad = config.scenes.find(s => s.index === sceneIndex)
-      } else {
-        // Default to first scene
-        sceneToLoad = config.scenes[0]
+      // Get actual dimensions for all product images
+      if (spaceData.placements && spaceData.placements.length > 0) {
+        await getAllProductDimensions(spaceData.placements)
       }
 
-      if (!sceneToLoad) {
-        throw new Error('Scene not found')
-      }
-
-      // Load the individual scene file
-      const sceneResponse = await fetch(`/scenes/${sceneToLoad.file}`)
-      if (!sceneResponse.ok) {
-        throw new Error('Failed to load scene data')
-      }
-      const sceneData: Scene = await sceneResponse.json()
-
-      setScene(sceneData)
+      setSpace(spaceData)
     } catch (err) {
-      console.error('Error loading scene:', err)
-      setError(err instanceof Error ? err.message : 'Failed to load scene')
+      console.error('Error loading space:', err)
+      setError(err instanceof Error ? err.message : 'Failed to load space')
     } finally {
       setLoading(false)
     }
-  }, [sceneId, sceneIndex])
+  }, [spaceId, getImageDimensions, getAllProductDimensions])
 
   /**
    * Calculates the scaling factor based on background dimensions and viewport
@@ -142,34 +148,34 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
 
     // If background is smaller than viewport, scale up to cover the viewport
     // Use the larger scale factor to ensure the image covers the entire viewport
-    const scale = Math.max(scaleX, scaleY)
+    const scale = Math.min(scaleX, scaleY)
     
     return scale
   }
 
   /**
-   * Gets the visible image from a placement (only one image per placement is shown)
+   * Gets the visible product from a placement (only one product per placement is shown)
    */
-  const getVisibleImage = (placement: Placement): PlacementProductImage | null => {
-    return placement.images.find(img => img.visible) || placement.images[0] || null
+  const getVisibleImage = (placement: Placement): ProductImage | null => {
+    return placement.products.find(product => product.visible) || placement.products[0] || null
   }
 
   /**
-   * Gets all visible images across all placements for rendering
+   * Gets all visible products across all placements for rendering
    */
-  const getVisibleImages = (): PlacementProductImage[] => {
-    if (!scene) return []
+  const getVisibleImages = (): ProductImage[] => {
+    if (!space) return []
 
-    return scene.placements
-      .filter(placement => placement.visible)
-      .map(placement => getVisibleImage(placement))
-      .filter((img): img is PlacementProductImage => img !== null)
+    return space.placements
+      .filter((placement: Placement) => placement.visible)
+      .map((placement: Placement) => getVisibleImage(placement))
+      .filter((product): product is ProductImage => product !== null)
   }
 
   /**
    * Creates a hotspot element with pulsing animation
    */
-  const createHotspot = (image: PlacementProductImage, placement: Placement) => {
+  const createHotspot = (image: ProductImage, placement: Placement) => {
     const hotspotSize = 24
     const scaledX = image.x * scale
     const scaledY = image.y * scale
@@ -211,21 +217,21 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
   }
 
   /**
-   * Handles image switching within a placement
+   * Handles product switching within a placement
    */
-  const handleImageSwitch = (newImage: PlacementProductImage) => {
-    if (!scene || !selectedPlacement) return
+  const handleImageSwitch = (newImage: ProductImage) => {
+    if (!space || !selectedPlacement) return
 
-    // Update the scene state to show the new image
-    const updatedScene = {
-      ...scene,
-      placements: scene.placements.map(placement => {
+    // Update the space state to show the new product
+    const updatedSpace = {
+      ...space,
+      placements: space.placements.map((placement: Placement) => {
         if (placement.id === selectedPlacement.id) {
           return {
             ...placement,
-            images: placement.images.map(img => ({
-              ...img,
-              visible: img.id === newImage.id
+            products: placement.products.map((product: ProductImage) => ({
+              ...product,
+              visible: product.id === newImage.id
             }))
           }
         }
@@ -233,8 +239,8 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
       })
     }
 
-    setScene(updatedScene)
-    setSelectedPlacement(updatedScene.placements.find(f => f.id === selectedPlacement.id) || null)
+    setSpace(updatedSpace)
+    setSelectedPlacement(updatedSpace.placements.find((p: Placement) => p.id === selectedPlacement.id) || null)
     closeDrawer()
   }
 
@@ -246,19 +252,19 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
     setSelectedPlacement(null)
   }
 
-  // Load scene on mount or when props change
+  // Load space on mount or when props change
   useEffect(() => {
-    loadScene()
-  }, [sceneId, sceneIndex, loadScene])
+    loadSpace()
+  }, [spaceId, loadSpace])
 
-  // Update scaling when scene loads or window resizes
+  // Update scaling when space loads or window resizes
   useEffect(() => {
-    if (!scene) return
+    if (!space || !space.backgroundImageSize) return
 
     const updateScale = () => {
       const newScale = calculateScale(
-        scene.backgroundImageSize.width,
-        scene.backgroundImageSize.height
+        space.backgroundImageSize!.width,
+        space.backgroundImageSize!.height
       )
       setScale(newScale)
     }
@@ -269,7 +275,7 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
     return () => {
       window.removeEventListener('resize', updateScale)
     }
-  }, [scene])
+  }, [space])
 
   // Enhanced smooth scrolling
   useEffect(() => {
@@ -320,14 +326,14 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
       container.removeEventListener('touchmove', handleScrollEnd)
       clearTimeout(scrollTimeout)
     }
-  }, [scene])
+  }, [space])
 
   if (loading) {
     return (
       <div className="w-full h-screen flex items-center justify-center bg-gray-100">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading scene...</p>
+          <p className="text-gray-600">Loading space...</p>
         </div>
       </div>
     )
@@ -339,7 +345,7 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
         <div className="text-center">
           <p className="text-red-600 mb-4">Error: {error}</p>
           <button 
-            onClick={loadScene}
+            onClick={loadSpace}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
           >
             Retry
@@ -349,16 +355,27 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
     )
   }
 
-  if (!scene) {
+  if (!space) {
     return (
       <div className="w-full h-screen flex items-center justify-center bg-gray-100">
-        <p className="text-gray-600">No scene data available</p>
+        <p className="text-gray-600">No space data available</p>
       </div>
     )
   }
 
-  const scaledWidth = scene.backgroundImageSize.width * scale
-  const scaledHeight = scene.backgroundImageSize.height * scale
+  // Use space image as background, or scene background if space doesn't have one
+  const backgroundImage = space.backgroundImage || space.image
+  
+  if (!backgroundImage) {
+    return (
+      <div className="w-full h-screen flex items-center justify-center bg-gray-100">
+        <p className="text-gray-600">No background image available for this space</p>
+      </div>
+    )
+  }
+
+  const scaledWidth = space.backgroundImageSize ? space.backgroundImageSize.width * scale : 1920 * scale
+  const scaledHeight = space.backgroundImageSize ? space.backgroundImageSize.height * scale : 1080 * scale
   const visibleImages = getVisibleImages()
 
   return (
@@ -385,8 +402,8 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
         >
           {/* Background Image */}
           <Image
-            src={scene.backgroundImage}
-            alt={`${scene.name} - Swipe to explore`}
+            src={backgroundImage}
+            alt={`${space.name} - Swipe to explore`}
             width={scaledWidth}
             height={scaledHeight}
             className="absolute top-0 left-0 w-full h-full object-cover select-none"
@@ -396,15 +413,13 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
               touchAction: 'pan-x pan-y',
             }}
             onError={() => {
-              console.error('Failed to load background image:', scene.backgroundImage)
+              console.error('Failed to load background image:', backgroundImage)
               // You could set a fallback image here
             }}
           />
 
-          {/* Placed Placements */}
+          {/* Placed Products */}
           {visibleImages.map((image) => {
-            const placementWithImage = scene.placements.find(f => f.images.some(img => img.id === image.id))
-            
             return (
               <React.Fragment key={`image-${image.id}`}>
                 <Image
@@ -421,13 +436,14 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
                   }}
                   draggable={false}
                   onError={(e) => {
-                    console.error('Failed to load placement image:', image.src)
+                    console.error('Failed to load placement product:', image.src)
                     e.currentTarget.style.display = 'none'
                   }}
                 />
-                {/* Only show hotspot if placement has multiple images and indicators are not hidden */}
-                {placementWithImage && placementWithImage.images.length > 0 && 
-                  createHotspot(image, placementWithImage)
+                {/* Only show hotspot if placement has multiple products and indicators are not hidden */}
+                {space.placements.find((p: Placement) => p.products.some((product: ProductImage) => product.id === image.id)) &&
+                  space.placements.find((p: Placement) => p.products.some((product: ProductImage) => product.id === image.id))!.products.length > 0 &&
+                  createHotspot(image, space.placements.find((p: Placement) => p.products.some((product: ProductImage) => product.id === image.id))!)
                 }
               </React.Fragment>
             )
@@ -435,10 +451,10 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
         </div>
       </div>
       
-      {/* Scene info indicator */}
+      {/* Space info indicator */}
       {!hideIndicators && (
         <div className="absolute top-4 left-4 bg-black/70 text-white px-3 py-2 rounded-lg text-sm">
-          <h2 className="font-medium">{scene.name}</h2>
+          <h2 className="font-medium">{space.name}</h2>
           {visibleImages.length > 0 && (
             <p className="text-xs opacity-75 mt-1">
               {visibleImages.length} item{visibleImages.length !== 1 ? 's' : ''} placed
@@ -457,74 +473,13 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
         </div>
       )}
 
-      {/* Bottom Drawer for Image Selection */}
-      {showDrawer && selectedPlacement && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end">
-          <div className="bg-white w-full rounded-t-2xl shadow-lg max-h-[80vh] flex flex-col">
-            {/* Drawer Header */}
-            <div className="flex justify-between items-center p-4 border-b">
-              <h3 className="text-lg font-semibold">{selectedPlacement.name}</h3>
-              <button 
-                onClick={closeDrawer}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Image Gallery */}
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="grid grid-cols-2 gap-4">
-                {selectedPlacement.images.map((image) => (
-                  <div key={image.id} className="bg-gray-50 rounded-lg overflow-hidden">
-                    <div className="aspect-square relative bg-gray-100">
-                      <Image
-                        src={image.src}
-                        alt={image.name}
-                        fill
-                        className="object-cover"
-                      />
-                      {image.visible && (
-                        <div className="absolute top-2 right-2 bg-blue-500 text-white rounded-full p-1">
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-3">
-                      <h3 className="font-medium text-sm mb-2 truncate">{image.name}</h3>
-                      <div className="space-y-2">
-                        <button 
-                          onClick={() => handleImageSwitch(image)}
-                          className={`w-full py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
-                            image.visible
-                              ? 'bg-green-600 text-white hover:bg-green-700'
-                              : 'bg-black text-white hover:bg-gray-800'
-                          }`}
-                          disabled={image.visible}
-                        >
-                          {image.visible ? 'Currently Shown' : 'Try On'}
-                        </button>
-                        <div className="flex space-x-2">
-                          <button className="flex-1 border border-gray-300 text-gray-700 py-2 px-3 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors">
-                            Details
-                          </button>
-                          <button className="flex-1 bg-blue-600 text-white py-2 px-3 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
-                            Buy Now
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Product Selection Drawer */}
+      <ImageSelectionDrawer
+        isOpen={showDrawer}
+        placement={selectedPlacement}
+        onClose={closeDrawer}
+        onProductSwitch={handleImageSwitch}
+      />
     </div>
   )
 }

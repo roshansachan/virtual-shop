@@ -1699,7 +1699,7 @@ function DesignStudioContent() {
           <div className="flex items-center justify-between">            
             <div className="flex items-center space-x-4">
               <Link 
-                href={`/?scene=${encodeURIComponent(getCurrentScene()?.name || '')}&sceneId=${currentSceneId}`}
+                href={`/?spaceId=${selectedSpaceId}`}
                 className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-sm transition-colors"
               >
                 ← Mobile View
