@@ -3,7 +3,46 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import Image from 'next/image'
 import ImageSelectionDrawer from './ImageSelectionDrawer'
-import type { FolderImage, Folder, Scene, SceneConfig } from '../types'
+import type { Scene, SceneConfig } from '../types'
+
+// Types for the filesystem-based configuration
+interface PlacementProductImage {
+  id: string
+  name: string
+  src: string
+  s3Key: string
+  visible: boolean
+  width: number
+  height: number
+  x: number
+  y: number
+}
+
+interface Placement {
+  id: string
+  name: string
+  expanded: boolean
+  visible: boolean
+  images: PlacementProductImage[]
+}
+
+interface Scene {
+  id: string
+  name: string
+  backgroundImage: string
+  backgroundImageSize: { width: number; height: number }
+  backgroundImageS3Key?: string
+  placements: Placement[]
+}
+
+interface SceneConfig {
+  scenes: Array<{
+    index: number
+    id: string
+    name: string
+    file: string
+  }>
+}
 
 interface SceneRendererProps {
   sceneId?: string
@@ -16,20 +55,39 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
   const [scale, setScale] = useState(1)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedFolder, setSelectedFolder] = useState<Folder | null>(null)
+  const [selectedPlacement, setSelectedPlacement] = useState<Placement | null>(null)
   const [showDrawer, setShowDrawer] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   /**
-   * Loads scene configuration from filesystem
+   * Loads scene configuration from filesystem or database
    */
   const loadScene = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
 
-      // First load the scene config index
+      // If sceneId is provided, fetch comprehensive data from database
+      if (sceneId && /^\d+$/.test(sceneId)) {
+        console.log('Fetching comprehensive scene data for sceneId:', sceneId);
+
+        const comprehensiveResponse = await fetch(`/api/scenes/${sceneId}/comprehensive`);
+        if (comprehensiveResponse.ok) {
+          const comprehensiveData = await comprehensiveResponse.json();
+          if (comprehensiveData.success) {
+            console.log('Comprehensive Scene Data from Database:', comprehensiveData.data);
+            // TODO: Transform this data into the Scene format expected by SceneRenderer
+            // For now, we'll fall back to filesystem loading
+          } else {
+            console.error('Failed to fetch comprehensive scene data:', comprehensiveData.error);
+          }
+        } else {
+          console.error('Comprehensive API call failed:', comprehensiveResponse.status);
+        }
+      }
+
+      // First load the scene config index (filesystem fallback)
       const configResponse = await fetch('/sceneConfig.json')
       if (!configResponse.ok) {
         throw new Error('Failed to load scene configuration')
@@ -92,28 +150,28 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
   }
 
   /**
-   * Gets the visible image from a folder (only one image per folder is shown)
+   * Gets the visible image from a placement (only one image per placement is shown)
    */
-  const getVisibleImage = (folder: Folder): FolderImage | null => {
-    return folder.images.find(img => img.visible) || folder.images[0] || null
+  const getVisibleImage = (placement: Placement): PlacementProductImage | null => {
+    return placement.images.find(img => img.visible) || placement.images[0] || null
   }
 
   /**
-   * Gets all visible images across all folders for rendering
+   * Gets all visible images across all placements for rendering
    */
-  const getVisibleImages = (): FolderImage[] => {
+  const getVisibleImages = (): PlacementProductImage[] => {
     if (!scene) return []
 
-    return scene.folders
-      .filter(folder => folder.visible)
-      .map(folder => getVisibleImage(folder))
-      .filter((img): img is FolderImage => img !== null)
+    return scene.placements
+      .filter(placement => placement.visible)
+      .map(placement => getVisibleImage(placement))
+      .filter((img): img is PlacementProductImage => img !== null)
   }
 
   /**
    * Creates a hotspot element with pulsing animation
    */
-  const createHotspot = (image: FolderImage, folder: Folder) => {
+  const createHotspot = (image: PlacementProductImage, placement: Placement) => {
     const hotspotSize = 24
     const scaledX = image.x * scale
     const scaledY = image.y * scale
@@ -133,7 +191,7 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
           width: `${hotspotSize}px`,
           height: `${hotspotSize}px`,
         }}
-        onClick={() => handleHotspotClick(folder)}
+        onClick={() => handleHotspotClick(placement)}
       >
         {/* Pulsing ring */}
         <div className="absolute inset-0 rounded-full border-2 border-white animate-ping opacity-75" />
@@ -147,38 +205,38 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
   }
 
   /**
-   * Handles hotspot click to show folder options
+   * Handles hotspot click to show placement options
    */
-  const handleHotspotClick = (folder: Folder) => {
-    setSelectedFolder(folder)
+  const handleHotspotClick = (placement: Placement) => {
+    setSelectedPlacement(placement)
     setShowDrawer(true)
   }
 
   /**
-   * Handles image switching within a folder
+   * Handles image switching within a placement
    */
-  const handleImageSwitch = (newImage: FolderImage) => {
-    if (!scene || !selectedFolder) return
+  const handleImageSwitch = (newImage: PlacementProductImage) => {
+    if (!scene || !selectedPlacement) return
 
     // Update the scene state to show the new image
     const updatedScene = {
       ...scene,
-      folders: scene.folders.map(folder => {
-        if (folder.id === selectedFolder.id) {
+      placements: scene.placements.map(placement => {
+        if (placement.id === selectedPlacement.id) {
           return {
-            ...folder,
-            images: folder.images.map(img => ({
+            ...placement,
+            images: placement.images.map(img => ({
               ...img,
               visible: img.id === newImage.id
             }))
           }
         }
-        return folder
+        return placement
       })
     }
 
     setScene(updatedScene)
-    setSelectedFolder(updatedScene.folders.find(f => f.id === selectedFolder.id) || null)
+    setSelectedPlacement(updatedScene.placements.find(f => f.id === selectedPlacement.id) || null)
     closeDrawer()
   }
 
@@ -187,7 +245,7 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
    */
   const closeDrawer = () => {
     setShowDrawer(false)
-    setSelectedFolder(null)
+    setSelectedPlacement(null)
   }
 
   // Load scene on mount or when props change
@@ -345,9 +403,9 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
             }}
           />
 
-          {/* Placed Images */}
+          {/* Placed Placements */}
           {visibleImages.map((image) => {
-            const folderWithImage = scene.folders.find(f => f.images.some(img => img.id === image.id))
+            const placementWithImage = scene.placements.find(f => f.images.some(img => img.id === image.id))
             
             return (
               <React.Fragment key={`image-${image.id}`}>
@@ -365,13 +423,13 @@ export default function SceneRenderer({ sceneId, sceneIndex, hideIndicators = fa
                   }}
                   draggable={false}
                   onError={(e) => {
-                    console.error('Failed to load product image:', image.src)
+                    console.error('Failed to load placement image:', image.src)
                     e.currentTarget.style.display = 'none'
                   }}
                 />
-                {/* Only show hotspot if folder has multiple images and indicators are not hidden */}
-                {folderWithImage && folderWithImage.images.length > 0 && 
-                  createHotspot(image, folderWithImage)
+                {/* Only show hotspot if placement has multiple images and indicators are not hidden */}
+                {placementWithImage && placementWithImage.images.length > 0 &&
+                  createHotspot(image, placementWithImage)
                 }
               </React.Fragment>
             )

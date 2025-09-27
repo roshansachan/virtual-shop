@@ -29,17 +29,17 @@ export async function GET(request: NextRequest) {
       url: getS3Url(obj.Key!),
       filename: obj.Key!.split('/').pop() || obj.Key!,
       type: getFileType(obj.Key!),
-      folder: getFolderPath(obj.Key!),
+      placement: getPlacementPath(obj.Key!),
     })) || [];
 
-    // Group assets by scene and folder for better organization
-    const groupedAssets = groupAssetsByPath(assets);
+    // Group assets by scene and placement for better organization
+    // const groupedAssets = groupAssetsByPath(assets);
 
     return NextResponse.json({
       success: true,
       data: {
         assets,
-        groupedAssets,
+        // groupedAssets,
         totalCount: response.KeyCount || 0,
         isTruncated: response.IsTruncated || false,
         nextContinuationToken: response.NextContinuationToken,
@@ -71,39 +71,39 @@ function getFileType(key: string): string {
   }
 }
 
-function getFolderPath(key: string): string {
+function getPlacementPath(key: string): string {
   const parts = key.split('/');
   parts.pop(); // Remove filename
   return parts.join('/');
 }
 
-function groupAssetsByPath(assets: any[]) {
-  const grouped: { [key: string]: any[] } = {};
-  
-  assets.forEach(asset => {
-    const pathParts = asset.key.split('/');
-    let groupKey = 'root';
-    
-    if (pathParts.length >= 3 && pathParts[0] === 'scenes') {
-      // Format: scenes/sceneId/products/folderId/ or scenes/sceneId/backgrounds/
-      const sceneId = pathParts[1];
-      const type = pathParts[2]; // 'products' or 'backgrounds'
-      
-      if (type === 'backgrounds') {
-        groupKey = `scenes/${sceneId}/backgrounds`;
-      } else if (type === 'products' && pathParts.length >= 4) {
-        const folderId = pathParts[3];
-        groupKey = `scenes/${sceneId}/products/${folderId}`;
-      }
-    } else {
-      groupKey = asset.folder;
-    }
-    
-    if (!grouped[groupKey]) {
-      grouped[groupKey] = [];
-    }
-    grouped[groupKey].push(asset);
-  });
-  
-  return grouped;
-}
+// function groupAssetsByPath(assets: any[]) {
+//   const grouped: { [key: string]: any[] } = {};
+//
+//   assets.forEach(asset => {
+//     const pathParts = asset.key.split('/');
+//     let groupKey = 'root';
+//
+//     if (pathParts.length >= 3 && pathParts[0] === 'scenes') {
+//       // Format: scenes/sceneId/products/placementId/ or scenes/sceneId/backgrounds/
+//       const sceneId = pathParts[1];
+//       const type = pathParts[2]; // 'products' or 'backgrounds'
+//
+//       if (type === 'backgrounds') {
+//         groupKey = `scenes/${sceneId}/backgrounds`;
+//       } else if (type === 'products' && pathParts.length >= 4) {
+//         const placementId = pathParts[3];
+//         groupKey = `scenes/${sceneId}/products/${placementId}`;
+//       }
+//     } else {
+//       groupKey = asset.placement;
+//     }
+//
+//     if (!grouped[groupKey]) {
+//       grouped[groupKey] = [];
+//     }
+//     grouped[groupKey].push(asset);
+//   });
+//
+//   return grouped;
+// }

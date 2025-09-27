@@ -1,25 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
-import { getS3Client, getAWSBucketName, generateS3Key, getS3Url } from '@/lib/s3-config';
+import { getS3Client, getAWSBucketName, getS3Url } from '@/lib/s3-config';
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('Upload API called');
+    console.log('Product upload API called');
     
     const formData = await request.formData();
     const file = formData.get('file') as File;
-    const sceneId = formData.get('sceneId') as string;
-    const placementId = formData.get('placementId') as string;
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    if (!sceneId || !placementId) {
-      return NextResponse.json({ error: 'Missing sceneId or placementId' }, { status: 400 });
-    }
-
-    console.log('File received:', file.name, 'for scene:', sceneId, 'placement:', placementId);
+    console.log('Product image received:', file.name);
 
     // Validate file type
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
@@ -33,9 +27,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'File too large. Maximum size is 10MB.' }, { status: 400 });
     }
 
-    // Generate S3 key
-    const s3Key = generateS3Key(sceneId, placementId, file.name);
-    console.log('Generated S3 key:', s3Key);
+    // Generate S3 key for products folder
+    const timestamp = Date.now();
+    const fileExtension = file.name.split('.').pop();
+    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const s3Key = `products/${timestamp}-${sanitizedFileName}`;
+    
+    console.log('Generated product S3 key:', s3Key);
 
     // Convert file to buffer
     const fileBuffer = Buffer.from(await file.arrayBuffer());
@@ -59,7 +57,7 @@ export async function POST(request: NextRequest) {
     // Generate public URL
     const imageUrl = getS3Url(s3Key);
     
-    console.log('Upload successful. Image URL:', imageUrl);
+    console.log('Product upload successful. Image URL:', imageUrl);
 
     // Return success response with image details
     return NextResponse.json({
@@ -73,9 +71,9 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('S3 upload error:', error);
+    console.error('Product S3 upload error:', error);
     return NextResponse.json(
-      { error: 'Failed to upload image to S3', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to upload product image to S3', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

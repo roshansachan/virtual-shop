@@ -58,10 +58,10 @@ Object.defineProperty(exports, 'AWS_REGION', {
 });
 
 // Generate S3 key for organizing files
-export function generateS3Key(sceneId: string, folderId: string, filename: string): string {
+export function generateS3Key(sceneId: string, placementId: string, filename: string): string {
   const timestamp = Date.now();
   const fileExtension = filename.split('.').pop()?.toLowerCase() || 'jpg';
-  return `scenes/${sceneId}/products/${folderId}/${timestamp}-${filename}`;
+  return `scenes/${sceneId}/products/${placementId}/${timestamp}-${filename}`;
 }
 
 // Generate S3 key for scene background images
@@ -71,9 +71,49 @@ export function generateSceneBackgroundS3Key(sceneId: string, filename: string):
   return `scenes/${sceneId}/backgrounds/${timestamp}-${filename}`;
 }
 
-// Generate public S3 URL
+// Generate public S3 URL from key
 export function getS3Url(key: string): string {
   const bucketName = getAWSBucketName();
   const region = getAWSRegion();
+  return `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
+}
+
+// Get S3 base URL from environment
+export function getS3BaseUrl(): string {
+  return process.env.S3_ENDPOINT_URL || getS3Url('');
+}
+
+// Convert S3 key to full URL - main utility function
+export function s3KeyToUrl(key: string | null | undefined): string | null {
+  if (!key) return null;
+  return getS3Url(key);
+}
+
+// Convert full S3 URL back to key (for migration purposes)
+export function s3UrlToKey(url: string | null | undefined): string | null {
+  if (!url) return null;
+  
+  const bucketName = getAWSBucketName();
+  const region = getAWSRegion();
+  const baseUrls = [
+    `https://${bucketName}.s3.${region}.amazonaws.com/`,
+    `https://${bucketName}.s3.amazonaws.com/`,
+    process.env.S3_ENDPOINT_URL + '/',
+  ];
+  
+  for (const baseUrl of baseUrls) {
+    if (url.startsWith(baseUrl)) {
+      return url.replace(baseUrl, '');
+    }
+  }
+  
+  // If it doesn't match any base URL pattern, assume it's already a key
+  return url;
+}
+
+// Client-side utility function to generate S3 URL from key
+export function generateS3UrlClient(key: string): string {
+  const bucketName = process.env.NEXT_PUBLIC_AWS_BUCKET_NAME || 'o1-virtual-shop';
+  const region = process.env.NEXT_PUBLIC_AWS_REGION || 'ap-south-1';
   return `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
 }

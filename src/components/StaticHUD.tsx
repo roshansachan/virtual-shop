@@ -21,7 +21,7 @@ const StaticHUD: React.FC<StaticHUDProps> = () => {
   const [selectedStyle, setSelectedStyle] = useState('Jaipuri');
   const [showLeftPanel, setShowLeftPanel] = useState(false);
 
-  const rooms = ['BedRoom', 'Living Room', 'Bathroom', 'Kitchen', 'Dining Room', 'Outdoor'];
+  const spaces = ['BedRoom', 'Living Room', 'Bathroom'];
 
   const styles = [
     { name: 'Lucknavi', color: 'bg-orange-200' },
@@ -72,8 +72,8 @@ const StaticHUD: React.FC<StaticHUDProps> = () => {
         />
       </div>
 
-      <HomeStyleSelector 
-        styles={homeStyles} 
+      <HomeStyleSelector
+        styles={homeStyles}
         showLeftPanel={showLeftPanel}
         onTogglePanel={() => setShowLeftPanel(!showLeftPanel)}
       />
