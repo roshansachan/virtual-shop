@@ -2,20 +2,20 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import Image from 'next/image'
-import type { Folder, FolderImage } from '../types'
+import type { Placement, Product } from '../types'
 
 interface ImageSelectionDrawerProps {
   isOpen: boolean
-  folder: Folder | null
+  placement: Placement | null
   onClose: () => void
-  onImageSwitch: (image: FolderImage) => void
+  onProductSwitch: (product: Product) => void
 }
 
 export default function ImageSelectionDrawer({
   isOpen,
-  folder,
+  placement,
   onClose,
-  onImageSwitch
+  onProductSwitch
 }: ImageSelectionDrawerProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const drawerRef = useRef<HTMLDivElement>(null)
@@ -188,9 +188,9 @@ export default function ImageSelectionDrawer({
       scrollContainer.removeEventListener('scroll', updateActiveElement)
       resizeObserver.disconnect()
     }
-  }, [folder?.images])
+  }, [placement?.products])
 
-  if (!isOpen || !folder) return null
+  if (!isOpen || !placement) return null
 
   return (
     <div className="fixed inset-0 bg-black/50 z-30 flex items-end font-belleza">
@@ -210,7 +210,7 @@ export default function ImageSelectionDrawer({
 
         {/* Drawer Header */}
         <div className="flex justify-between items-center px-6 py-4">
-          <h3 className="text-xl text-white">{folder.name}</h3>
+          <h3 className="text-xl text-white">{placement.name}</h3>
           <button 
             onClick={onClose}
             className="text-white/60 hover:text-white transition-colors"
@@ -241,15 +241,15 @@ export default function ImageSelectionDrawer({
                 </div>
               </div>
               
-              {folder.images.map((image) => (
-                <div key={image.id} className="image-container flex-shrink-0 snap-center flex flex-col items-center justify-center px-1.5 transition-all duration-300 ease-out" style={{ width: '60%' }}>
+              {placement.products.map((product) => (
+                <div key={product.id} className="image-container flex-shrink-0 snap-center flex flex-col items-center justify-center px-1.5 transition-all duration-300 ease-out" style={{ width: '60%' }}>
                   <div className="w-full max-w-sm">
                     {/* Product Image - Landscape aspect ratio */}
                     <div className="aspect-[16/11] relative bg-gray-200 rounded-2xl overflow-hidden mb-6">
-                      {image.src ? (
+                      {product.src ? (
                         <Image
-                          src={image.src}
-                          alt={image.name}
+                          src={product.src}
+                          alt={product.name}
                           fill
                           className="object-contain"
                           onError={(e) => {
@@ -275,7 +275,7 @@ export default function ImageSelectionDrawer({
                     {/* Product Details */}
                     <div className="text-left mb-3">
                       <h4 className="text-white text-base font-normal">
-                        {image.name}
+                        {product.name}
                       </h4>
                       
                       {/* Price */}
@@ -287,17 +287,17 @@ export default function ImageSelectionDrawer({
                     {/* Action Buttons - Three in a row */}
                     <div className="cta-buttons flex gap-2 sm:gap-3 transition-opacity duration-300">
                       <div
-                        onClick={() => !image.visible && onImageSwitch(image)}
+                        onClick={() => !product.visible && onProductSwitch(product)}
                         className={`flex-1 min-w-0 h-8 px-2 sm:px-2.5 py-1 rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden cursor-pointer transition-all ${
-                          image.visible
+                          product.visible
                             ? 'bg-green-600 hover:bg-green-700'
                             : 'bg-white hover:bg-gray-100 active:scale-95'
                         }`}
                       >
                         <div className={`text-xs font-normal leading-none truncate ${
-                          image.visible ? 'text-white' : 'text-[#333333]'
+                          product.visible ? 'text-white' : 'text-[#333333]'
                         }`}>
-                          {image.visible ? 'Selected' : 'Try On'}
+                          {product.visible ? 'Selected' : 'Try On'}
                         </div>
                       </div>
                       

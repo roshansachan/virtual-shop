@@ -17,7 +17,7 @@ const StreetIcon = () => (
 );
 
 const StaticHUD: React.FC<StaticHUDProps> = () => {
-  const [selectedRoom, setSelectedRoom] = useState('Living Room');
+  const [selectedSpace, setSelectedSpace] = useState('Living Room');
   const [selectedStyle, setSelectedStyle] = useState('Jaipuri');
   const [showLeftPanel, setShowLeftPanel] = useState(false);
 
@@ -66,9 +66,9 @@ const StaticHUD: React.FC<StaticHUDProps> = () => {
         showLeftPanel ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
       }`}>
         <RoomNavigation
-          rooms={rooms}
-          selectedRoom={selectedRoom}
-          onRoomSelect={setSelectedRoom}
+          rooms={spaces}
+          selectedRoom={selectedSpace}
+          onRoomSelect={setSelectedSpace}
         />
       </div>
 
