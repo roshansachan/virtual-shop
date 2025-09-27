@@ -148,7 +148,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
 
     // If background is smaller than viewport, scale up to cover the viewport
     // Use the larger scale factor to ensure the image covers the entire viewport
-    const scale = Math.min(scaleX, scaleY)
+    const scale = Math.max(scaleX, scaleY)
     
     return scale
   }
