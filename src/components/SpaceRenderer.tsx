@@ -188,7 +188,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
     return (
       <div
         key={`hotspot-${image.id}`}
-        className="absolute z-20"
+        className="absolute z-20 pointer-events-none"
         style={{
           left: `${hotspotX}px`,
           top: `${hotspotY}px`,

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import StaticHeader from './StaticHeader';
 import RoomNavigation from './RoomNavigation';
@@ -48,6 +48,14 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  // Use ref to store callback to avoid dependency issues
+  const onSelectedSpaceChangeRef = useRef(onSelectedSpaceChange);
+
+  // Update ref when callback changes
+  useEffect(() => {
+    onSelectedSpaceChangeRef.current = onSelectedSpaceChange;
+  }, [onSelectedSpaceChange]);
+
   // Update URL query param when selectedSpace changes
   useEffect(() => {
     if (selectedSpace !== null && selectedSpace !== undefined) {
@@ -87,21 +95,6 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
         const result = await response.json();
         if (result.success) {
           setSpaces(result.data);
-          const currentSpaceValid = selectedSpace !== null && result.data.some((s: Space) => s.id === selectedSpace);
-          if (!currentSpaceValid) {
-            const spaceIdFromUrl = searchParams.get('spaceId');
-            let selectedSpaceId: number | null = null;
-            if (spaceIdFromUrl) {
-              const parsed = parseInt(spaceIdFromUrl);
-              if (!isNaN(parsed) && result.data.some((s: Space) => s.id === parsed)) {
-                selectedSpaceId = parsed;
-              }
-            }
-            if (selectedSpaceId === null && result.data.length > 0) {
-              selectedSpaceId = result.data[0].id;
-            }
-            onSelectedSpaceChange?.(selectedSpaceId);
-          }
         }
       } catch (error) {
         console.error('Failed to fetch spaces:', error);
@@ -109,7 +102,31 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     };
 
     fetchSpaces();
-  }, [selectedScene, searchParams, onSelectedSpaceChange, selectedSpace]);
+  }, [selectedScene]);
+
+  // Handle selected space validation and updates when spaces change
+  useEffect(() => {
+    if (spaces.length === 0) return;
+
+    const currentSpaceValid = selectedSpace !== null && spaces.some((s: Space) => s.id === selectedSpace);
+    if (!currentSpaceValid) {
+      const spaceIdFromUrl = searchParams.get('spaceId');
+      let selectedSpaceId: number | null = null;
+      if (spaceIdFromUrl) {
+        const parsed = parseInt(spaceIdFromUrl);
+        if (!isNaN(parsed) && spaces.some((s: Space) => s.id === parsed)) {
+          selectedSpaceId = parsed;
+        }
+      }
+      if (selectedSpaceId === null && spaces.length > 0) {
+        selectedSpaceId = spaces[0].id;
+      }
+      // Only call the callback if we actually need to change the selected space
+      if (selectedSpaceId !== selectedSpace) {
+        onSelectedSpaceChangeRef.current?.(selectedSpaceId);
+      }
+    }
+  }, [spaces, selectedSpace, searchParams]);
 
   const handleSceneSelect = (scene: Scene) => {
     setSelectedScene(scene);
