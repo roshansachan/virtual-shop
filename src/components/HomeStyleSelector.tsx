@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 
 // SVG Icon Components
 const ChevronRight = ({ size = 16, className }: { size?: number; className?: string }) => (
@@ -23,27 +24,29 @@ interface HomeStyle {
 
 interface HomeStyleSelectorProps {
   styles: HomeStyle[];
+  selectedStyle: string;
+  onStyleSelect: (styleName: string) => void;
   showLeftPanel: boolean;
   onTogglePanel: () => void;
 }
 
-const HomeStyleSelector: React.FC<HomeStyleSelectorProps> = ({ styles, showLeftPanel, onTogglePanel }) => {
+const HomeStyleSelector: React.FC<HomeStyleSelectorProps> = ({ styles, selectedStyle, onStyleSelect, showLeftPanel, onTogglePanel }) => {
 
   return (
     <>
       {/* Left Panel Toggle */}
-      <div className={`absolute inline-flex bg-black/60 rounded-b-lg p-2 pointer-events-auto origin-top-left -rotate-90 transition-all duration-300 ease-in-out ${showLeftPanel ? 'left-52 top-96' : 'left-0 top-96'}`}>
+      <div className={`absolute inline-flex bg-black/60 rounded-b-lg p-2 pointer-events-auto origin-top-left -rotate-90 transition-all duration-300 ease-in-out font-belleza ${showLeftPanel ? 'left-52 top-96' : 'left-0 top-96'}`}>
         <button
           onClick={onTogglePanel}
           className="text-white text-xs uppercase writing-mode-vertical-rl transform px-2"
         >
           HOME STYLES
         </button>
-        <ChevronRight size={16} className={`transition-transform duration-300 ease-in-out ${showLeftPanel ? "-rotate-90" : "rotate-90"}`} />
+        <ChevronRight size={16} className={`transition-transform duration-300 ease-in-out text-white ${showLeftPanel ? "-rotate-90" : "rotate-90"}`} />
       </div>
 
       {/* Left Panel */}
-      <div className={`absolute left-0 top-0 bottom-0 w-52 bg-black/48 overflow-y-auto pointer-events-auto transition-all duration-300 ease-in-out ${
+      <div className={`absolute left-0 top-0 bottom-0 w-52 bg-black/48 overflow-y-auto pointer-events-auto transition-all duration-300 ease-in-out font-belleza ${
         showLeftPanel 
           ? 'translate-x-0 opacity-100' 
           : '-translate-x-full opacity-0'
@@ -61,11 +64,23 @@ const HomeStyleSelector: React.FC<HomeStyleSelectorProps> = ({ styles, showLeftP
 
           <div className="space-y-3">
             {styles.map((style, index) => (
-              <div key={index} className="relative rounded-lg overflow-hidden">
-                <div className="aspect-[174/104] bg-gray-300 relative">
+              <div 
+                key={index} 
+                className={`relative rounded-lg overflow-hidden cursor-pointer transition-all duration-200 ${
+                  selectedStyle === style.name ? 'ring-2 ring-white' : 'hover:ring-1 hover:ring-white/50'
+                }`}
+                onClick={() => onStyleSelect(style.name)}
+              >
+                <div className="aspect-[174/104] relative">
+                  <Image
+                    src={style.image}
+                    alt={style.name}
+                    fill
+                    className="object-cover"
+                  />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
                   <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2">
-                    <span className="text-white text-sm font-normal">{style.name}</span>
+                    <div className="text-white text-sm font-normal text-center">{style.name}</div>
                   </div>
                 </div>
               </div>

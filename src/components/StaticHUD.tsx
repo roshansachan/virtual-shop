@@ -1,13 +1,36 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import StaticHeader from './StaticHeader';
 import RoomNavigation from './RoomNavigation';
 import HomeStyleSelector from './HomeStyleSelector';
-import StateCultureSelector from './StateCultureSelector';
+// import StateCultureSelector from './StateCultureSelector';
 
 interface StaticHUDProps {
   onClose?: () => void;
+  selectedSpace?: number | null;
+  onSelectedSpaceChange?: (spaceId: number | null) => void;
+}
+
+interface Scene {
+  id: string;
+  name: string;
+  backgroundImage: string;
+  backgroundImageSize: { width: number; height: number };
+  backgroundImageS3Key?: string;
+  theme_id?: number;
+  dbId?: string;
+  spaces: any[];
+}
+
+interface Space {
+  id: number;
+  scene_id: number;
+  name: string;
+  image?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 const StreetIcon = () => (
@@ -16,33 +39,117 @@ const StreetIcon = () => (
   </svg>
 );
 
-const StaticHUD: React.FC<StaticHUDProps> = () => {
-  const [selectedSpace, setSelectedSpace] = useState('Living Room');
-  const [selectedStyle, setSelectedStyle] = useState('Jaipuri');
+const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceChange }) => {
+  const [scenes, setScenes] = useState<Scene[]>([]);
+  const [selectedScene, setSelectedScene] = useState<Scene | null>(null);
+  const [spaces, setSpaces] = useState<Space[]>([]);
   const [showLeftPanel, setShowLeftPanel] = useState(false);
 
-  const spaces = ['BedRoom', 'Living Room', 'Bathroom'];
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const styles = [
-    { name: 'Lucknavi', color: 'bg-orange-200' },
-    { name: 'Gujrati', color: 'bg-green-200' },
-    { name: 'Tamil', color: 'bg-blue-200' },
-    { name: 'Jaipuri', color: 'bg-purple-200' },
-    { name: 'Kashmiri', color: 'bg-pink-200' },
-    { name: 'Telugu', color: 'bg-yellow-200' },
-    { name: 'Malayalami', color: 'bg-red-200' },
-  ];
+  // Use ref to store callback to avoid dependency issues
+  const onSelectedSpaceChangeRef = useRef(onSelectedSpaceChange);
 
-  const homeStyles = [
-    { name: 'Indian', image: '/api/placeholder/174/104' },
-    { name: 'American country', image: '/api/placeholder/174/104' },
-    { name: 'American', image: '/api/placeholder/174/104' },
-    { name: 'Scandinavian', image: '/api/placeholder/174/104' },
-    { name: 'French Country', image: '/api/placeholder/174/104' },
-    { name: 'Bohemian', image: '/api/placeholder/174/104' },
-    { name: 'American Colonial', image: '/api/placeholder/174/104' },
-    { name: 'Regency', image: '/api/placeholder/174/104' },
-  ];
+  // Update ref when callback changes
+  useEffect(() => {
+    onSelectedSpaceChangeRef.current = onSelectedSpaceChange;
+  }, [onSelectedSpaceChange]);
+
+  // Update URL query param when selectedSpace changes
+  useEffect(() => {
+    if (selectedSpace !== null && selectedSpace !== undefined) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('spaceId', selectedSpace.toString());
+      router.replace(url.toString());
+    }
+  }, [selectedSpace, router]);
+
+  // Fetch scenes on component mount
+  useEffect(() => {
+    const fetchScenes = async () => {
+      try {
+        const response = await fetch('/api/scenes');
+        const result = await response.json();
+        if (result.success) {
+          setScenes(result.data);
+          if (result.data.length > 0) {
+            setSelectedScene(result.data[0]);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch scenes:', error);
+      }
+    };
+
+    fetchScenes();
+  }, []);
+
+  // Fetch spaces when selected scene changes
+  useEffect(() => {
+    if (!selectedScene) return;
+
+    const fetchSpaces = async () => {
+      try {
+        const response = await fetch(`/api/spaces?scene_id=${selectedScene.id}`);
+        const result = await response.json();
+        if (result.success) {
+          setSpaces(result.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch spaces:', error);
+      }
+    };
+
+    fetchSpaces();
+  }, [selectedScene]);
+
+  // Handle selected space validation and updates when spaces change
+  useEffect(() => {
+    if (spaces.length === 0) return;
+
+    const currentSpaceValid = selectedSpace !== null && spaces.some((s: Space) => s.id === selectedSpace);
+    if (!currentSpaceValid) {
+      const spaceIdFromUrl = searchParams.get('spaceId');
+      let selectedSpaceId: number | null = null;
+      if (spaceIdFromUrl) {
+        const parsed = parseInt(spaceIdFromUrl);
+        if (!isNaN(parsed) && spaces.some((s: Space) => s.id === parsed)) {
+          selectedSpaceId = parsed;
+        }
+      }
+      if (selectedSpaceId === null && spaces.length > 0) {
+        selectedSpaceId = spaces[0].id;
+      }
+      // Only call the callback if we actually need to change the selected space
+      if (selectedSpaceId !== selectedSpace) {
+        onSelectedSpaceChangeRef.current?.(selectedSpaceId);
+      }
+    }
+  }, [spaces, selectedSpace, searchParams]);
+
+  const handleSceneSelect = (scene: Scene) => {
+    setSelectedScene(scene);
+    setShowLeftPanel(false); // Close the panel when selecting a scene
+  };
+
+  // Transform scenes for HomeStyleSelector
+  const homeStyles = scenes.map(scene => ({
+    name: scene.name,
+    image: scene.backgroundImage
+  }));
+
+  // Transform spaces for RoomNavigation
+  const roomNames = spaces.map(space => space.name);
+
+  const selectedRoomName = spaces.find(space => space.id === selectedSpace)?.name || '';
+
+  const handleRoomSelect = (roomName: string) => {
+    const space = spaces.find(s => s.name === roomName);
+    if (space) {
+      onSelectedSpaceChange?.(space.id);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-20 pointer-events-none font-belleza">
@@ -66,20 +173,25 @@ const StaticHUD: React.FC<StaticHUDProps> = () => {
         showLeftPanel ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
       }`}>
         <RoomNavigation
-          rooms={spaces}
-          selectedRoom={selectedSpace}
-          onRoomSelect={setSelectedSpace}
+          rooms={roomNames}
+          selectedRoom={selectedRoomName}
+          onRoomSelect={handleRoomSelect}
         />
       </div>
 
       <HomeStyleSelector
         styles={homeStyles}
+        selectedStyle={selectedScene?.name || ''}
+        onStyleSelect={(styleName) => {
+          const scene = scenes.find(s => s.name === styleName);
+          if (scene) handleSceneSelect(scene);
+        }}
         showLeftPanel={showLeftPanel}
         onTogglePanel={() => setShowLeftPanel(!showLeftPanel)}
       />
 
       {/* Style Selector Bar */}
-      <div className={`absolute bottom-0 left-0 right-0 transition-all duration-300 ease-in-out ${
+      {/* <div className={`absolute bottom-0 left-0 right-0 transition-all duration-300 ease-in-out ${
         showLeftPanel ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
       }`}>
         <StateCultureSelector
@@ -87,7 +199,7 @@ const StaticHUD: React.FC<StaticHUDProps> = () => {
           selectedStyle={selectedStyle}
           onStyleSelect={setSelectedStyle}
         />
-      </div>
+      </div> */}
 
       {/* Bottom Navigation */}
       <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-black/64 to-transparent pointer-events-auto" />

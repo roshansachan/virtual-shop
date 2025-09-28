@@ -84,7 +84,8 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
       setError(null)
 
       if (!spaceId) {
-        throw new Error('Space ID is required')
+        setLoading(false)
+        return
       }
 
       console.log('Fetching space data for spaceId:', spaceId);
@@ -175,7 +176,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
   /**
    * Creates a hotspot element with pulsing animation
    */
-  const createHotspot = (image: ProductImage, placement: Placement) => {
+  const createHotspot = (image: ProductImage) => {
     const hotspotSize = 24
     const scaledX = image.x * scale
     const scaledY = image.y * scale
@@ -188,14 +189,13 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
     return (
       <div
         key={`hotspot-${image.id}`}
-        className="absolute cursor-pointer z-20"
+        className="absolute z-20 pointer-events-none"
         style={{
           left: `${hotspotX}px`,
           top: `${hotspotY}px`,
           width: `${hotspotSize}px`,
           height: `${hotspotSize}px`,
         }}
-        onClick={() => handleHotspotClick(placement)}
       >
         {/* Pulsing ring */}
         <div className="absolute inset-0 rounded-full border-2 border-white animate-ping opacity-75" />
@@ -420,6 +420,11 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
 
           {/* Placed Products */}
           {visibleImages.map((image) => {
+            // Find the placement that contains this image
+            const placement = space.placements.find((p: Placement) => 
+              p.products.some((product: ProductImage) => product.id === image.id)
+            )
+            
             return (
               <React.Fragment key={`image-${image.id}`}>
                 <Image
@@ -427,7 +432,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
                   alt={image.name}
                   width={image.width * scale}
                   height={image.height * scale}
-                  className="absolute select-none"
+                  className="absolute select-none cursor-pointer"
                   style={{
                     left: `${image.x * scale}px`,
                     top: `${image.y * scale}px`,
@@ -435,15 +440,15 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
                     height: `${image.height * scale}px`,
                   }}
                   draggable={false}
+                  onClick={() => placement && handleHotspotClick(placement)}
                   onError={(e) => {
                     console.error('Failed to load placement product:', image.src)
                     e.currentTarget.style.display = 'none'
                   }}
                 />
-                {/* Only show hotspot if placement has multiple products and indicators are not hidden */}
-                {space.placements.find((p: Placement) => p.products.some((product: ProductImage) => product.id === image.id)) &&
-                  space.placements.find((p: Placement) => p.products.some((product: ProductImage) => product.id === image.id))!.products.length > 0 &&
-                  createHotspot(image, space.placements.find((p: Placement) => p.products.some((product: ProductImage) => product.id === image.id))!)
+                {/* Only show hotspot if placement has products */}
+                {placement && placement.products.length > 0 &&
+                  createHotspot(image)
                 }
               </React.Fragment>
             )
