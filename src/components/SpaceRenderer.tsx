@@ -84,7 +84,8 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
       setError(null)
 
       if (!spaceId) {
-        throw new Error('Space ID is required')
+        setLoading(false)
+        return
       }
 
       console.log('Fetching space data for spaceId:', spaceId);
