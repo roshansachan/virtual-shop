@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import StaticHeader from './StaticHeader';
 import RoomNavigation from './RoomNavigation';
 import HomeStyleSelector from './HomeStyleSelector';
@@ -44,6 +45,18 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [showLeftPanel, setShowLeftPanel] = useState(false);
 
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Update URL query param when selectedSpace changes
+  useEffect(() => {
+    if (selectedSpace !== null && selectedSpace !== undefined) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('spaceId', selectedSpace.toString());
+      router.replace(url.toString());
+    }
+  }, [selectedSpace, router]);
+
   // Fetch scenes on component mount
   useEffect(() => {
     const fetchScenes = async () => {
@@ -74,10 +87,20 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
         const result = await response.json();
         if (result.success) {
           setSpaces(result.data);
-          if (result.data.length > 0) {
-            onSelectedSpaceChange?.(result.data[0].id);
-          } else {
-            onSelectedSpaceChange?.(null);
+          const currentSpaceValid = selectedSpace !== null && result.data.some((s: Space) => s.id === selectedSpace);
+          if (!currentSpaceValid) {
+            const spaceIdFromUrl = searchParams.get('spaceId');
+            let selectedSpaceId: number | null = null;
+            if (spaceIdFromUrl) {
+              const parsed = parseInt(spaceIdFromUrl);
+              if (!isNaN(parsed) && result.data.some((s: Space) => s.id === parsed)) {
+                selectedSpaceId = parsed;
+              }
+            }
+            if (selectedSpaceId === null && result.data.length > 0) {
+              selectedSpaceId = result.data[0].id;
+            }
+            onSelectedSpaceChange?.(selectedSpaceId);
           }
         }
       } catch (error) {
@@ -86,7 +109,7 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     };
 
     fetchSpaces();
-  }, [selectedScene, onSelectedSpaceChange]);
+  }, [selectedScene, searchParams, onSelectedSpaceChange, selectedSpace]);
 
   const handleSceneSelect = (scene: Scene) => {
     setSelectedScene(scene);
@@ -96,7 +119,7 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
   // Transform scenes for HomeStyleSelector
   const homeStyles = scenes.map(scene => ({
     name: scene.name,
-    image: scene.backgroundImage || '/api/placeholder/174/104'
+    image: scene.backgroundImage
   }));
 
   // Transform spaces for RoomNavigation

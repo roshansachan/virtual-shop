@@ -88,12 +88,12 @@ export async function GET(
     const spaceConfig = {
       id: spaceData.space_id.toString(),
       name: spaceData.space_name,
-      image: spaceData.space_image && !isS3Url(spaceData.space_image)
+      backgroundImage: spaceData.space_image && !isS3Url(spaceData.space_image)
         ? s3KeyToUrl(spaceData.space_image)
         : spaceData.space_image,
-      backgroundImage: spaceData.scene_background_image && !isS3Url(spaceData.scene_background_image)
-        ? s3KeyToUrl(spaceData.scene_background_image)
-        : spaceData.scene_background_image,
+      // backgroundImage: spaceData.scene_background_image && !isS3Url(spaceData.scene_background_image)
+      //   ? s3KeyToUrl(spaceData.scene_background_image)
+      //   : spaceData.scene_background_image,
       // Note: backgroundImageSize will be determined client-side when image loads
       placements: [] as any[]
     };

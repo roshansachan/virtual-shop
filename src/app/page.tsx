@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useState, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 // import Link from 'next/link'
 import SpaceRenderer from '@/components/SpaceRenderer'
@@ -47,6 +47,11 @@ function HomeContent({ selectedSpace, onSelectedSpaceChange }: HomeContentProps)
 
 export default function Home() {
   const [selectedSpace, setSelectedSpace] = useState<number | null>(null);
+  
+  const handleSelectedSpaceChange = useCallback((spaceId: number | null) => {
+    setSelectedSpace(spaceId);
+  }, []);
+
   return (
     <Suspense fallback={
       <div className="w-full h-screen flex items-center justify-center bg-gray-100">
@@ -58,11 +63,11 @@ export default function Home() {
     }>
       <HomeContent 
         selectedSpace={selectedSpace}
-        onSelectedSpaceChange={setSelectedSpace}
+        onSelectedSpaceChange={handleSelectedSpaceChange}
       />
       <StaticHUD 
         selectedSpace={selectedSpace}
-        onSelectedSpaceChange={setSelectedSpace}
+        onSelectedSpaceChange={handleSelectedSpaceChange}
       />
     </Suspense>
   );

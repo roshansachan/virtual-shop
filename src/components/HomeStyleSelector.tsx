@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 
 // SVG Icon Components
 const ChevronRight = ({ size = 16, className }: { size?: number; className?: string }) => (
@@ -34,18 +35,18 @@ const HomeStyleSelector: React.FC<HomeStyleSelectorProps> = ({ styles, selectedS
   return (
     <>
       {/* Left Panel Toggle */}
-      <div className={`absolute inline-flex bg-black/60 rounded-b-lg p-2 pointer-events-auto origin-top-left -rotate-90 transition-all duration-300 ease-in-out ${showLeftPanel ? 'left-52 top-96' : 'left-0 top-96'}`}>
+      <div className={`absolute inline-flex bg-black/60 rounded-b-lg p-2 pointer-events-auto origin-top-left -rotate-90 transition-all duration-300 ease-in-out font-belleza ${showLeftPanel ? 'left-52 top-96' : 'left-0 top-96'}`}>
         <button
           onClick={onTogglePanel}
           className="text-white text-xs uppercase writing-mode-vertical-rl transform px-2"
         >
           HOME STYLES
         </button>
-        <ChevronRight size={16} className={`transition-transform duration-300 ease-in-out ${showLeftPanel ? "-rotate-90" : "rotate-90"}`} />
+        <ChevronRight size={16} className={`transition-transform duration-300 ease-in-out text-white ${showLeftPanel ? "-rotate-90" : "rotate-90"}`} />
       </div>
 
       {/* Left Panel */}
-      <div className={`absolute left-0 top-0 bottom-0 w-52 bg-black/48 overflow-y-auto pointer-events-auto transition-all duration-300 ease-in-out ${
+      <div className={`absolute left-0 top-0 bottom-0 w-52 bg-black/48 overflow-y-auto pointer-events-auto transition-all duration-300 ease-in-out font-belleza ${
         showLeftPanel 
           ? 'translate-x-0 opacity-100' 
           : '-translate-x-full opacity-0'
@@ -70,14 +71,17 @@ const HomeStyleSelector: React.FC<HomeStyleSelectorProps> = ({ styles, selectedS
                 }`}
                 onClick={() => onStyleSelect(style.name)}
               >
-                <div className="aspect-[174/104] bg-gray-300 relative">
+                <div className="aspect-[174/104] relative">
+                  <Image
+                    src={style.image}
+                    alt={style.name}
+                    fill
+                    className="object-cover"
+                  />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
                   <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2">
-                    <span className="text-white text-sm font-normal">{style.name}</span>
+                    <div className="text-white text-sm font-normal text-center">{style.name}</div>
                   </div>
-                  {selectedStyle === style.name && (
-                    <div className="absolute top-2 right-2 w-3 h-3 bg-white rounded-full"></div>
-                  )}
                 </div>
               </div>
             ))}
