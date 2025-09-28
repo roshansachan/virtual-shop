@@ -23,11 +23,13 @@ interface HomeStyle {
 
 interface HomeStyleSelectorProps {
   styles: HomeStyle[];
+  selectedStyle: string;
+  onStyleSelect: (styleName: string) => void;
   showLeftPanel: boolean;
   onTogglePanel: () => void;
 }
 
-const HomeStyleSelector: React.FC<HomeStyleSelectorProps> = ({ styles, showLeftPanel, onTogglePanel }) => {
+const HomeStyleSelector: React.FC<HomeStyleSelectorProps> = ({ styles, selectedStyle, onStyleSelect, showLeftPanel, onTogglePanel }) => {
 
   return (
     <>
@@ -61,12 +63,21 @@ const HomeStyleSelector: React.FC<HomeStyleSelectorProps> = ({ styles, showLeftP
 
           <div className="space-y-3">
             {styles.map((style, index) => (
-              <div key={index} className="relative rounded-lg overflow-hidden">
+              <div 
+                key={index} 
+                className={`relative rounded-lg overflow-hidden cursor-pointer transition-all duration-200 ${
+                  selectedStyle === style.name ? 'ring-2 ring-white' : 'hover:ring-1 hover:ring-white/50'
+                }`}
+                onClick={() => onStyleSelect(style.name)}
+              >
                 <div className="aspect-[174/104] bg-gray-300 relative">
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
                   <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2">
                     <span className="text-white text-sm font-normal">{style.name}</span>
                   </div>
+                  {selectedStyle === style.name && (
+                    <div className="absolute top-2 right-2 w-3 h-3 bg-white rounded-full"></div>
+                  )}
                 </div>
               </div>
             ))}

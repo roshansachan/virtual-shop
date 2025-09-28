@@ -6,53 +6,30 @@ import { useSearchParams } from 'next/navigation'
 import SpaceRenderer from '@/components/SpaceRenderer'
 import StaticHUD from '@/components/StaticHUD'
 
-function HomeContent() {
+interface HomeContentProps {
+  selectedSpace: number | null;
+  onSelectedSpaceChange: (spaceId: number | null) => void;
+}
+
+function HomeContent({ selectedSpace, onSelectedSpaceChange }: HomeContentProps) {
   const searchParams = useSearchParams();
   const spaceIdParam = searchParams.get('spaceId');
-  const [defaultSpaceId, setDefaultSpaceId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(!spaceIdParam);
 
-  // Fetch default space if no spaceId in URL
+  // Initialize selectedSpace from query param on mount
   useEffect(() => {
-    if (spaceIdParam) return;
-
-    const fetchDefaultSpace = async () => {
-      try {
-        const response = await fetch('/api/spaces');
-        if (!response.ok) throw new Error('Failed to fetch spaces');
-        
-        const data = await response.json();
-        if (data.success && data.data.length > 0) {
-          setDefaultSpaceId(data.data[0].id.toString());
-        }
-      } catch (error) {
-        console.error('Error fetching default space:', error);
-      } finally {
-        setLoading(false);
+    if (spaceIdParam && !selectedSpace) {
+      const spaceId = parseInt(spaceIdParam, 10);
+      if (!isNaN(spaceId)) {
+        onSelectedSpaceChange(spaceId);
       }
-    };
-
-    fetchDefaultSpace();
-  }, [spaceIdParam]);
-
-  const spaceId = spaceIdParam || defaultSpaceId || undefined;
-
-  if (loading) {
-    return (
-      <div className="w-full h-screen flex items-center justify-center bg-gray-100">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading space...</p>
-        </div>
-      </div>
-    );
-  }
+    }
+  }, [spaceIdParam, selectedSpace, onSelectedSpaceChange]);
 
   return (
     <div className="relative w-full h-screen">
       <SpaceRenderer 
         hideIndicators
-        spaceId={spaceId}
+        spaceId={selectedSpace?.toString()}
       />
       
       {/* Design Studio link */}
@@ -69,6 +46,7 @@ function HomeContent() {
 }
 
 export default function Home() {
+  const [selectedSpace, setSelectedSpace] = useState<number | null>(null);
   return (
     <Suspense fallback={
       <div className="w-full h-screen flex items-center justify-center bg-gray-100">
@@ -78,8 +56,14 @@ export default function Home() {
         </div>
       </div>
     }>
-      <HomeContent />
-      <StaticHUD />
+      <HomeContent 
+        selectedSpace={selectedSpace}
+        onSelectedSpaceChange={setSelectedSpace}
+      />
+      <StaticHUD 
+        selectedSpace={selectedSpace}
+        onSelectedSpaceChange={setSelectedSpace}
+      />
     </Suspense>
   );
 }
