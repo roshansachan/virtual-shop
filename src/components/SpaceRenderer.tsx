@@ -277,6 +277,26 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
     }
   }, [space])
 
+  // Handle dynamic viewport height for mobile browsers
+  useEffect(() => {
+    const updateViewportHeight = () => {
+      // Use visualViewport if available (more accurate on mobile), fallback to innerHeight
+      const vh = window.visualViewport?.height || window.innerHeight
+      document.documentElement.style.setProperty('--vh', `${vh * 0.01}px`)
+    }
+
+    updateViewportHeight()
+    
+    // Listen for viewport changes (address bar show/hide on mobile)
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', updateViewportHeight)
+      return () => window.visualViewport?.removeEventListener('resize', updateViewportHeight)
+    } else {
+      window.addEventListener('resize', updateViewportHeight)
+      return () => window.removeEventListener('resize', updateViewportHeight)
+    }
+  }, [])
+
   // Enhanced smooth scrolling
   useEffect(() => {
     const container = scrollContainerRef.current
@@ -330,7 +350,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
 
   if (loading) {
     return (
-      <div className="w-full h-screen flex items-center justify-center bg-gray-100">
+      <div className="w-full flex items-center justify-center bg-gray-100" style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading space...</p>
@@ -341,7 +361,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
 
   if (error) {
     return (
-      <div className="w-full h-screen flex items-center justify-center bg-gray-100">
+      <div className="w-full flex items-center justify-center bg-gray-100" style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
         <div className="text-center">
           <p className="text-red-600 mb-4">Error: {error}</p>
           <button 
@@ -357,7 +377,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
 
   if (!space) {
     return (
-      <div className="w-full h-screen flex items-center justify-center bg-gray-100">
+      <div className="w-full flex items-center justify-center bg-gray-100" style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
         <p className="text-gray-600">No space data available</p>
       </div>
     )
@@ -368,7 +388,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
   
   if (!backgroundImage) {
     return (
-      <div className="w-full h-screen flex items-center justify-center bg-gray-100">
+      <div className="w-full flex items-center justify-center bg-gray-100" style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
         <p className="text-gray-600">No background image available for this space</p>
       </div>
     )
@@ -379,7 +399,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
   const visibleImages = getVisibleImages()
 
   return (
-    <div className="w-full" style={{ height: '100vh' }}>
+    <div className="w-full" style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
       {/* Horizontal scroll container */}
       <div 
         ref={scrollContainerRef}
