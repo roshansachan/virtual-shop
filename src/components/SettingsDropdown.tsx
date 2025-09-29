@@ -61,6 +61,13 @@ export default function SettingsDropdown({ onThemeManagement }: SettingsDropdown
             >
               Product Management
             </Link>
+            <Link
+              href="/art-stories"
+              onClick={() => setIsOpen(false)}
+              className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              Manage Art Stories
+            </Link>
             {/* Add more menu items here in the future */}
           </div>
         </div>

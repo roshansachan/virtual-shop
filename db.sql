@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS themes (
   id          BIGSERIAL PRIMARY KEY,
   theme_type  theme_type_enum,          -- optional (leave NULL allowed)
   name        TEXT,
+  slug        TEXT,
   image       TEXT,
   metadata    JSONB DEFAULT '{}'::jsonb,
   created_at  TIMESTAMPTZ DEFAULT NOW(),
@@ -64,13 +65,19 @@ CREATE TABLE IF NOT EXISTS placement_images (
   id               BIGSERIAL PRIMARY KEY,
   placement_id     BIGINT REFERENCES placements(id) ON DELETE CASCADE,
   name             TEXT,
-  image                TEXT,
-  is_visible       BOOLEAN,
   anchor_position  JSONB DEFAULT '{}'::jsonb,
   position         JSONB DEFAULT '{}'::jsonb,
+  art_story_id     BIGINT REFERENCES art_stories(id) ON DELETE SET NULL,
   product_id       BIGINT REFERENCES products(id) ON DELETE SET NULL,
   created_at       TIMESTAMPTZ DEFAULT NOW(),
   updated_at       TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_plimg_placement_id ON placement_images(placement_id);
 CREATE INDEX IF NOT EXISTS idx_plimg_product_id   ON placement_images(product_id);
+
+-- 7) ART STORIES (for creative storytelling)
+CREATE TABLE IF NOT EXISTS art_stories (
+  id      BIGSERIAL PRIMARY KEY,
+  title   TEXT NOT NULL,
+  stories JSONB DEFAULT '[]'::jsonb
+);
