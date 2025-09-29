@@ -6,6 +6,7 @@ interface RoomNavigationProps {
   rooms: { id: string; name: string }[];
   selectedRoomId: string;
   onRoomSelect: (roomId: string) => void;
+  disablePointerEvents?: boolean;
 }
 
 // SVG Icon Components
@@ -21,7 +22,7 @@ const ChevronRight = ({ size = 16, className }: { size?: number; className?: str
   </svg>
 );
 
-const RoomNavigation: React.FC<RoomNavigationProps> = ({ rooms, selectedRoomId, onRoomSelect }) => {
+const RoomNavigation: React.FC<RoomNavigationProps> = ({ rooms, selectedRoomId, onRoomSelect, disablePointerEvents }) => {
   console.log('RoomNavigation render', { rooms, selectedRoomId });
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -88,7 +89,7 @@ const RoomNavigation: React.FC<RoomNavigationProps> = ({ rooms, selectedRoomId, 
   }, [selectedRoomId, centerActiveRoom]);
 
   return (
-    <div className="absolute top-30 left-9 right-9 bg-black/60 rounded-2xl px-4 py-2 pointer-events-auto">
+    <div className={`absolute top-30 left-9 right-9 bg-black/60 rounded-2xl px-4 py-2 ${disablePointerEvents ? 'pointer-events-none' : 'pointer-events-auto'}`}>
       <div className="flex items-center justify-between">
         <button onClick={navigateToPrevious} className="w-3 h-3 text-white z-10 relative">
           <ChevronLeft size={12} />
