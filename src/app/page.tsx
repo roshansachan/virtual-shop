@@ -15,6 +15,26 @@ function HomeContent({ selectedSpace, onSelectedSpaceChange }: HomeContentProps)
   const searchParams = useSearchParams();
   const spaceIdParam = searchParams.get('spaceId');
 
+  // Handle dynamic viewport height for mobile browsers
+  useEffect(() => {
+    const updateViewportHeight = () => {
+      // Use visualViewport if available (more accurate on mobile), fallback to innerHeight
+      const vh = window.visualViewport?.height || window.innerHeight
+      document.documentElement.style.setProperty('--vh', `${vh * 0.01}px`)
+    }
+
+    updateViewportHeight()
+    
+    // Listen for viewport changes (address bar show/hide on mobile)
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', updateViewportHeight)
+      return () => window.visualViewport?.removeEventListener('resize', updateViewportHeight)
+    } else {
+      window.addEventListener('resize', updateViewportHeight)
+      return () => window.removeEventListener('resize', updateViewportHeight)
+    }
+  }, [])
+
   // Initialize selectedSpace from query param on mount
   useEffect(() => {
     if (spaceIdParam && !selectedSpace) {
@@ -26,7 +46,7 @@ function HomeContent({ selectedSpace, onSelectedSpaceChange }: HomeContentProps)
   }, [spaceIdParam, selectedSpace, onSelectedSpaceChange]);
 
   return (
-    <div className="relative w-full h-screen">
+    <div className="relative w-full" style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
       <SpaceRenderer 
         hideIndicators
         spaceId={selectedSpace?.toString()}
@@ -54,7 +74,7 @@ export default function Home() {
 
   return (
     <Suspense fallback={
-      <div className="w-full h-screen flex items-center justify-center bg-gray-100">
+      <div className="w-full flex items-center justify-center bg-gray-100" style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading...</p>
