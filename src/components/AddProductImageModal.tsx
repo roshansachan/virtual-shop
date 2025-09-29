@@ -435,7 +435,7 @@ export default function AddProductImageModal({
                   />
                   {editMode && (
                     <p className="text-xs text-gray-500 mt-1">
-                      Current image. Click ${`"Change Image"`} to upload a new one.
+                      Current image. Click {`"Change Image"`} to upload a new one.
                     </p>
                   )}
                 </div>

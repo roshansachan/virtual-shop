@@ -57,8 +57,7 @@ const ProductImage: React.FC<ProductImageProps> = ({ product, onDragEnd }) => {
       height={product.height}
       draggable
       onDragEnd={handleDragEnd}
-      shadowColor="black"
-      shadowBlur={10}
+      shadowColor="black"      
       shadowOpacity={0.6}
       shadowOffsetX={5}
       shadowOffsetY={5}
@@ -81,10 +80,11 @@ interface PlacementImageComponentProps {
     spaceId: string;
     name: string;
   };
+  selectedPlacementId: string;
   onDragEnd: (placementImage: any, x: number, y: number) => void;
 }
 
-const PlacementImageComponent: React.FC<PlacementImageComponentProps> = ({ placementImage, onDragEnd }) => {
+const PlacementImageComponent: React.FC<PlacementImageComponentProps> = ({ placementImage, selectedPlacementId, onDragEnd }) => {
   const [image] = useImage(placementImage.src);
 
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
@@ -93,6 +93,10 @@ const PlacementImageComponent: React.FC<PlacementImageComponentProps> = ({ place
 
   if (!image || !placementImage.visible) return null;
 
+  // Only allow dragging if this placement image belongs to the currently selected placement
+  const isDraggable = Boolean(selectedPlacementId && placementImage.placementId === selectedPlacementId);
+  const isSelected = Boolean(selectedPlacementId && placementImage.placementId === selectedPlacementId);
+
   return (
     <KonvaImage
       image={image}
@@ -100,8 +104,11 @@ const PlacementImageComponent: React.FC<PlacementImageComponentProps> = ({ place
       y={placementImage.y}
       width={placementImage.width}
       height={placementImage.height}
-      draggable
-      onDragEnd={handleDragEnd}
+      draggable={isDraggable}
+      onDragEnd={handleDragEnd}      
+      listening={isDraggable} // Only listen to events for draggable images
+      // stroke={isSelected ? 'rgba(0,0,0,0.2)' : undefined} // Blue border for selected placement images
+      strokeWidth={isSelected ? 2 : 0}              
     />
   );
 };
@@ -401,105 +408,111 @@ function DesignStudioContent() {
     }
   }, []);
 
-  // Fetch placements for the current space from database
-  const fetchPlacementsForSpace = useCallback(async (spaceDbId: string) => {
+  // Fetch all space data (placements and placement images) using bulk API
+  const fetchCompleteSpaceData = useCallback(async (spaceDbId: string) => {
     try {
-      const response = await fetch(`/api/placements?space_id=${spaceDbId}`);
+      const response = await fetch(`/api/spaces/${spaceDbId}`);
       const data = await response.json();
       
       if (data.success && data.data) {
-        // Convert database placements to frontend format
-        const dbPlacements = data.data.map((dbPlacement: any) => ({
-          id: dbPlacement.id.toString(),
-          name: dbPlacement.name,
-          products: [], // Products will be loaded separately if needed
-          dbId: dbPlacement.id.toString()
-        }));
+        const spaceData = data.data;
         
-        // Update the current space with the fetched placements
+        // Convert the space data format to match the design studio format
+        const convertedPlacements = await Promise.all(
+          spaceData.placements.map(async (placement: any) => {
+            // Convert placement images with actual dimensions
+            const placementImages = await Promise.all(
+              placement.products.map(async (product: any) => {
+                return new Promise<any>((resolve) => {
+                  const img = new Image();
+                  img.onload = () => {
+                    resolve({
+                      id: typeof product.id === 'string' ? parseInt(product.id) : product.id,
+                      name: product.name,
+                      image: product.src,
+                      x: product.x || 0,
+                      y: product.y || 0,
+                      width: img.naturalWidth > 0 ? img.naturalWidth : 100,
+                      height: img.naturalHeight > 0 ? img.naturalHeight : 100,
+                      visible: true,
+                      product_id: product.productInfo?.product_id || null,
+                      productInfo: product.productInfo || null // Include the complete product info
+                    });
+                  };
+                  img.onerror = () => {
+                    resolve({
+                      id: typeof product.id === 'string' ? parseInt(product.id) : product.id,
+                      name: product.name,
+                      image: product.src,
+                      x: product.x || 0,
+                      y: product.y || 0,
+                      width: product.width || 100,
+                      height: product.height || 100,
+                      visible: true,
+                      product_id: product.productInfo?.product_id || null,
+                      productInfo: product.productInfo || null // Include the complete product info
+                    });
+                  };
+                  img.src = product.src;
+                });
+              })
+            );
+
+            // Find the active image (visible one)
+            const visibleProduct = placement.products.find((p: any) => p.visible) || placement.products[0];
+            const activeProductImageId = visibleProduct 
+              ? (typeof visibleProduct.id === 'string' ? parseInt(visibleProduct.id) : visibleProduct.id)
+              : null;
+
+            return {
+              id: placement.id.toString(),
+              name: placement.name,
+              products: [], // Keep for compatibility
+              placementImages,
+              activeProductImageId,
+              dbId: placement.id.toString()
+            };
+          })
+        );
+        
+        // Update the current space with the complete fetched data
         setScenes(prevScenes => prevScenes.map(scene => ({
           ...scene,
           spaces: scene.spaces.map(space => 
             space.dbId === spaceDbId 
-              ? { ...space, placements: dbPlacements }
+              ? { ...space, placements: convertedPlacements }
               : space
           )
         })));
       }
     } catch (error) {
-      console.error('Error fetching placements for space:', error);
+      console.error('Error fetching complete space data:', error);
     }
   }, []);
 
-  // Fetch placement images for the current placement from database
+  // Legacy function for backward compatibility (now uses bulk API)
+  const fetchPlacementsForSpace = useCallback(async (spaceDbId: string) => {
+    // Use the bulk API instead of individual calls
+    await fetchCompleteSpaceData(spaceDbId);
+  }, [fetchCompleteSpaceData]);
+
+  // Legacy function for backward compatibility (now uses bulk API)
   const fetchPlacementImages = useCallback(async (placementDbId: string) => {
-    try {
-      const response = await fetch(`/api/placement-images?placement_id=${placementDbId}`);
-      const data = await response.json();
-      
-      if (data.success && data.data) {
-        // Convert database placement images to frontend format with actual dimensions
-        const dbPlacementImages = await Promise.all(
-          data.data.map(async (dbImage: any) => {
-            // Load image to get actual dimensions
-            return new Promise<any>((resolve) => {
-              const img = new Image();
-              img.onload = () => {
-                resolve({
-                  id: typeof dbImage.id === 'string' ? parseInt(dbImage.id) : dbImage.id,
-                  name: dbImage.name,
-                  image: dbImage.image,
-                  x: dbImage.position?.x || 0,
-                  y: dbImage.position?.y || 0,
-                  width: img.naturalWidth > 0 ? img.naturalWidth : 100, // Use original width
-                  height: img.naturalHeight > 0 ? img.naturalHeight : 100, // Use original height
-                  visible: true,
-                  product_id: dbImage.product_id // Include product_id from database
-                });
-              };
-              img.onerror = () => {
-                // Fallback to default dimensions if image fails to load
-                resolve({
-                  id: typeof dbImage.id === 'string' ? parseInt(dbImage.id) : dbImage.id,
-                  name: dbImage.name,
-                  image: dbImage.image,
-                  x: dbImage.position?.x || 0,
-                  y: dbImage.position?.y || 0,
-                  width: 100,
-                  height: 100,
-                  visible: true,
-                  product_id: dbImage.product_id // Include product_id from database
-                });
-              };
-              img.src = dbImage.image.includes('http') ? dbImage.image : generateS3Url(dbImage.image);
-            });
-          })
-        );
-        
-        // Update the current placement with the fetched images
-        setScenes(prevScenes => prevScenes.map(scene => ({
-          ...scene,
-          spaces: scene.spaces.map(space => ({
-            ...space,
-            placements: space.placements.map(placement => {
-              if (placement.dbId === placementDbId) {
-                // Find the active image based on is_visible from database
-                const activeImage = data.data.find((dbImage: any) => dbImage.is_visible === true);
-                return { 
-                  ...placement, 
-                  placementImages: dbPlacementImages,
-                  activeProductImageId: activeImage ? (typeof activeImage.id === 'string' ? parseInt(activeImage.id) : activeImage.id) : null
-                };
-              }
-              return placement;
-            })
-          }))
-        })));
+    // Find the space that contains this placement and refresh the entire space
+    setScenes(prevScenes => {
+      for (const scene of prevScenes) {
+        for (const space of scene.spaces) {
+          const placement = space.placements.find(p => p.dbId === placementDbId);
+          if (placement && space.dbId) {
+            // Refresh the entire space data
+            fetchCompleteSpaceData(space.dbId);
+            break;
+          }
+        }
       }
-    } catch (error) {
-      console.error('Error fetching placement images:', error);
-    }
-  }, []);
+      return prevScenes;
+    });
+  }, [fetchCompleteSpaceData]);
 
   // Space management functions
   const handleSpaceCreated = useCallback((newSpace: Space) => {
@@ -1339,6 +1352,79 @@ function DesignStudioContent() {
     return activePlacementImages;
   }, [currentSceneId, scenes, selectedSpaceId]);
 
+  // Handle keyboard navigation for placement images
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    // Only handle keyboard navigation if a placement is selected and we're not in an input field
+    if (!selectedPlacementId || 
+        event.target instanceof HTMLInputElement || 
+        event.target instanceof HTMLTextAreaElement ||
+        event.target instanceof HTMLSelectElement) {
+      return;
+    }
+
+    const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+    if (!arrowKeys.includes(event.key)) {
+      return;
+    }
+
+    event.preventDefault(); // Prevent page scrolling
+
+    // Determine movement distance based on modifier keys
+    let moveDistance = 1; // Default 1px for precise control
+    if (event.shiftKey) {
+      moveDistance = 10; // 10px for faster movement
+    }
+    if (event.ctrlKey || event.metaKey) {
+      moveDistance = 50; // 50px for rapid positioning
+    }
+
+    // Calculate movement deltas
+    let deltaX = 0;
+    let deltaY = 0;
+    
+    switch (event.key) {
+      case 'ArrowUp':
+        deltaY = -moveDistance;
+        break;
+      case 'ArrowDown':
+        deltaY = moveDistance;
+        break;
+      case 'ArrowLeft':
+        deltaX = -moveDistance;
+        break;
+      case 'ArrowRight':
+        deltaX = moveDistance;
+        break;
+    }
+
+    // Get all placement images from the currently selected placement
+    const currentPlacementImages = getCurrentPlacedPlacementImages().filter(
+      (img) => img.placementId === selectedPlacementId
+    );
+
+    // Move each placement image in the selected placement
+    currentPlacementImages.forEach((placementImage) => {
+      const newX = Math.max(0, placementImage.x + deltaX);
+      const newY = Math.max(0, placementImage.y + deltaY);
+      
+      // Update the position using the existing drag end handler
+      handlePlacementImageDragEnd(placementImage, newX, newY);
+    });
+  }, [selectedPlacementId, getCurrentPlacedPlacementImages, handlePlacementImageDragEnd]);
+
+  // Add keyboard event listeners
+  useEffect(() => {
+    const handleKeyDownEvent = (event: KeyboardEvent) => {
+      handleKeyDown(event);
+    };
+
+    window.addEventListener('keydown', handleKeyDownEvent);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDownEvent);
+    };
+  }, [handleKeyDown]);
+
   // Stable callback for refresh function
   // Stable callback for scenes loaded
   const handleScenesLoaded = useCallback((loadedScenes: Scene[]) => {
@@ -1394,14 +1480,14 @@ function DesignStudioContent() {
     }
   }, [currentSceneId, fetchSpacesForScene]);
 
-  // Fetch placements when current space changes
+  // Fetch complete space data (all placements and their images) when current space changes
   useEffect(() => {
     if (selectedSpaceId && selectedSpaceId !== lastFetchedSpaceRef.current) {
       // Check if selectedSpaceId looks like a database ID (numeric string)
       if (/^\d+$/.test(selectedSpaceId)) {
         // selectedSpaceId is already a database ID
         lastFetchedSpaceRef.current = selectedSpaceId;
-        fetchPlacementsForSpace(selectedSpaceId);
+        fetchCompleteSpaceData(selectedSpaceId);
       } else {
         // selectedSpaceId might be a frontend ID, need to find the space
         // Use functional update to get current spaces without adding dependency
@@ -1410,7 +1496,7 @@ function DesignStudioContent() {
             const selectedSpace = scene.spaces.find(space => space.id === selectedSpaceId);
             if (selectedSpace && selectedSpace.dbId && selectedSpace.dbId !== lastFetchedSpaceRef.current) {
               lastFetchedSpaceRef.current = selectedSpace.dbId;
-              fetchPlacementsForSpace(selectedSpace.dbId);
+              fetchCompleteSpaceData(selectedSpace.dbId);
               break;
             }
           }
@@ -1418,25 +1504,39 @@ function DesignStudioContent() {
         });
       }
     }
-  }, [selectedSpaceId, fetchPlacementsForSpace]);
+  }, [selectedSpaceId, fetchCompleteSpaceData]);
 
-  // Fetch placement images when current placement changes
+  // Handle placement selection (no need to fetch images as they're already loaded with space data)
   useEffect(() => {
     if (selectedPlacementId) {
-      // Find the selected placement to get its database ID
+      // Find the selected placement to validate it exists
       const selectedPlacement = getSelectedPlacement();
       if (selectedPlacement && selectedPlacement.dbId) {
-        // Prevent duplicate API calls for the same placement
-        if (lastFetchedPlacementRef.current !== selectedPlacement.dbId) {
-          lastFetchedPlacementRef.current = selectedPlacement.dbId;
-          fetchPlacementImages(selectedPlacement.dbId);
+        // Update the last fetched placement ref for consistency
+        lastFetchedPlacementRef.current = selectedPlacement.dbId;
+        
+        // If placement images aren't loaded yet, fetch complete space data
+        if (!selectedPlacement.placementImages || selectedPlacement.placementImages.length === 0) {
+          // Find the space that contains this placement
+          setScenes(currentScenes => {
+            for (const scene of currentScenes) {
+              for (const space of scene.spaces) {
+                const placement = space.placements.find(p => p.dbId === selectedPlacement.dbId);
+                if (placement && space.dbId) {
+                  fetchCompleteSpaceData(space.dbId);
+                  break;
+                }
+              }
+            }
+            return currentScenes;
+          });
         }
       }
     } else {
       // Reset when no placement is selected
       lastFetchedPlacementRef.current = '';
     }
-  }, [selectedPlacementId, getSelectedPlacement]);
+  }, [selectedPlacementId, getSelectedPlacement, fetchCompleteSpaceData]);
 
   // Stable callback for handling refresh function from SceneManagementHeader
   const handleRefreshAvailable = useCallback((refreshFn: () => Promise<void>) => {
@@ -1735,7 +1835,14 @@ function DesignStudioContent() {
             </div>
           ) : (
             /* Container for the canvas */
-            <div className="absolute inset-0">
+            <div 
+              className="absolute inset-0 outline-none" 
+              tabIndex={0}
+              onFocus={() => console.log('Canvas focused')}
+              style={{
+                border: selectedPlacementId ? '2px solid rgba(59, 130, 246, 0.5)' : 'none'
+              }}
+            >
               <Stage 
                 ref={stageRef}
                 width={stageSize.width} 
@@ -1770,6 +1877,7 @@ function DesignStudioContent() {
                     <PlacementImageComponent
                       key={placementImage.id}
                       placementImage={placementImage}
+                      selectedPlacementId={selectedPlacementId}
                       onDragEnd={handlePlacementImageDragEnd}
                     />
                   ))}
@@ -1780,10 +1888,22 @@ function DesignStudioContent() {
 
           {/* Pan instructions overlay - only show when there are scenes */}
           {scenes.length > 0 && (
-            <div className="absolute top-4 right-4 bg-black/70 text-white px-3 py-2 rounded-lg text-sm">
-              <div className="flex items-center space-x-2">
-                <span>🖱️</span>
-                <span>Drag background to pan • Drag items to move</span>
+            <div className="absolute top-4 right-4 bg-black/70 text-white px-3 py-2 rounded-lg text-sm max-w-sm">
+              <div className="flex flex-col space-y-1">
+                <div className="flex items-center space-x-2">
+                  <span>🖱️</span>
+                  <span>
+                    Drag background to pan • {selectedPlacementId ? 'Selected placement images can be moved' : 'Select a placement to move items'}
+                  </span>
+                </div>
+                {selectedPlacementId && (
+                  <div className="flex items-center space-x-2 text-xs opacity-90">
+                    <span>⌨️</span>
+                    <span>
+                      Arrow keys: 1px • Shift+Arrow: 10px • Ctrl/Cmd+Arrow: 50px
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           )}
