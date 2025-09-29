@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import Image from 'next/image'
-import ImageSelectionDrawer from './ImageSelectionDrawer'
+import ProductSelectionDrawer from './ProductSelectionDrawer'
 import type { SpaceConfig } from '@/types/index'
 
 // Types for the space-based configuration
@@ -479,7 +479,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
       )}
 
       {/* Product Selection Drawer */}
-      <ImageSelectionDrawer
+      <ProductSelectionDrawer
         isOpen={showDrawer}
         placement={selectedPlacement}
         onClose={closeDrawer}

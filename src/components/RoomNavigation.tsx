@@ -40,14 +40,14 @@ const RoomNavigation: React.FC<RoomNavigationProps> = ({ rooms, selectedRoom, on
   const getExtendedRooms = useCallback(() => {
     const extended = [];
     // Add more rooms for better scrolling experience
-    for (let i = -3; i <= 3; i++) {
+    for (let i = -1; i <= 4; i++) {
       const index = (currentIndex + i + rooms.length) % rooms.length;
       extended.push({ room: rooms[index], originalIndex: index });
     }
     return extended;
   }, [currentIndex, rooms]);
 
-  const extendedRooms = getExtendedRooms();
+  const extendedRooms = rooms.length > 1 ? getExtendedRooms() : rooms.map((room, index) => ({ room, originalIndex: index }));
 
   // Function to center the active room
   const centerActiveRoom = useCallback(() => {

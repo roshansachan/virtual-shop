@@ -91,9 +91,6 @@ export async function GET(
       backgroundImage: spaceData.space_image && !isS3Url(spaceData.space_image)
         ? s3KeyToUrl(spaceData.space_image)
         : spaceData.space_image,
-      // backgroundImage: spaceData.scene_background_image && !isS3Url(spaceData.scene_background_image)
-      //   ? s3KeyToUrl(spaceData.scene_background_image)
-      //   : spaceData.scene_background_image,
       // Note: backgroundImageSize will be determined client-side when image loads
       placements: [] as any[]
     };
@@ -128,6 +125,7 @@ export async function GET(
           src: row.placement_image && !isS3Url(row.placement_image)
             ? s3KeyToUrl(row.placement_image)
             : row.placement_image,
+          productImage: row.product_image,
           s3Key: row.placement_image,
           visible: row.is_visible || false,
           width: position.width || 100,

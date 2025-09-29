@@ -103,6 +103,7 @@ export interface Placement {
 export interface Product {
   id: string;
   src: string;
+  productImage?: string;
   name: string;
   width: number;
   height: number;
