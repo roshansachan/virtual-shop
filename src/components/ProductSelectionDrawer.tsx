@@ -1,8 +1,20 @@
 'use client'
 
-import React, { useEffect, useRef, useState, useCallback } from 'react'
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import Image from 'next/image'
 import type { Placement, Product } from '../types'
+
+// Debounce utility function
+function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): (...args: Parameters<T>) => void {
+  let timeout: NodeJS.Timeout | null = null
+  return (...args: Parameters<T>) => {
+    if (timeout) clearTimeout(timeout)
+    timeout = setTimeout(() => func(...args), wait)
+  }
+}
 
 interface ProductSelectionDrawerProps {
   isOpen: boolean
@@ -29,12 +41,115 @@ export default function ProductSelectionDrawer({
   // Animation state for smooth unmounting
   const [shouldRender, setShouldRender] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
+  
+  // Scroll timeout ref for cleanup
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
   const handleDragStart = useCallback((clientY: number) => {
     setIsDragging(true)
     setDragStartY(clientY)
     setCurrentTransform(0)
   }, [])
-  
+
+  // Debounced scroll handler to prevent rapid firing during fast scrolling
+  const debouncedHandleScroll = useMemo(
+    () => debounce(() => {
+      const scrollContainer = scrollContainerRef.current
+      if (!scrollContainer) return
+
+      const imageContainers = scrollContainer.querySelectorAll('.image-container')
+      
+      const scrollTimeout = scrollTimeoutRef.current
+
+      const updateActiveElement = () => {
+        const containerRect = scrollContainer.getBoundingClientRect()
+        const containerCenter = containerRect.left + containerRect.width / 2
+        
+        let closestElement: Element | null = null
+        let minDistance = Infinity
+        
+        imageContainers.forEach((element) => {
+          const elementRect = element.getBoundingClientRect()
+          const elementCenter = elementRect.left + elementRect.width / 2
+          const distance = Math.abs(elementCenter - containerCenter)
+          
+          if (distance < minDistance) {
+            minDistance = distance
+            closestElement = element
+          }
+        })
+        
+        // Reset all elements to inactive state first
+        imageContainers.forEach((element) => {
+          (element as HTMLElement).style.width = '60%'
+          const ctaButtons = element.querySelector('.cta-buttons') as HTMLElement
+          if (ctaButtons) {
+            ctaButtons.style.opacity = '0'
+            ctaButtons.style.pointerEvents = 'none'
+          }
+        })
+        
+        // Set the closest element as active
+        if (closestElement) {
+          (closestElement as HTMLElement).style.width = '70%'
+          const ctaButtons = (closestElement as HTMLElement).querySelector('.cta-buttons') as HTMLElement
+          if (ctaButtons) {
+            ctaButtons.style.opacity = '1'
+            ctaButtons.style.pointerEvents = 'auto'
+          }
+        }
+      }
+
+      const snapToCenter = () => {
+        if (!scrollContainer) return
+
+        const containerRect = scrollContainer.getBoundingClientRect()
+        const containerCenter = containerRect.left + containerRect.width / 2
+        
+        let closestElement: Element | null = null
+        let minDistance = Infinity
+        let targetScrollLeft = scrollContainer.scrollLeft
+        
+        imageContainers.forEach((element) => {
+          const elementRect = element.getBoundingClientRect()
+          const elementCenter = elementRect.left + elementRect.width / 2
+          const distance = Math.abs(elementCenter - containerCenter)
+          
+          if (distance < minDistance) {
+            minDistance = distance
+            closestElement = element
+            // Calculate the scroll position needed to center this element
+            const elementLeft = (element as HTMLElement).offsetLeft
+            const elementWidth = (element as HTMLElement).offsetWidth
+            const containerWidth = scrollContainer.clientWidth
+            targetScrollLeft = elementLeft - (containerWidth / 2) + (elementWidth / 2)
+          }
+        })
+        
+        // Smoothly scroll to the calculated position
+        if (closestElement && Math.abs(scrollContainer.scrollLeft - targetScrollLeft) > 1) {
+          scrollContainer.scrollTo({
+            left: Math.max(0, targetScrollLeft),
+            behavior: 'smooth'
+          })
+        }
+      }
+
+      updateActiveElement()
+      
+      // Clear existing timeout
+      if (scrollTimeout) {
+        clearTimeout(scrollTimeout)
+      }
+      
+      // Set a new timeout to snap to center after scrolling stops
+      scrollTimeoutRef.current = setTimeout(() => {
+        snapToCenter()
+      }, 50)
+    }, 16),
+    []
+  )
+
   const handleDragMove = useCallback((clientY: number) => {
     if (!isDragging) return
     
@@ -189,8 +304,8 @@ export default function ProductSelectionDrawer({
     const imageContainers = scrollContainer.querySelectorAll('.image-container')
     
     let activeElement: Element | null = null
-    let scrollTimeout: NodeJS.Timeout | null = null
 
+    // Initial check
     const updateActiveElement = () => {
       const containerRect = scrollContainer.getBoundingClientRect()
       const containerCenter = containerRect.left + containerRect.width / 2
@@ -234,73 +349,24 @@ export default function ProductSelectionDrawer({
       }
     }
 
-    const snapToCenter = () => {
-      if (!scrollContainer) return
-
-      const containerRect = scrollContainer.getBoundingClientRect()
-      const containerCenter = containerRect.left + containerRect.width / 2
-      
-      let closestElement: Element | null = null
-      let minDistance = Infinity
-      let targetScrollLeft = scrollContainer.scrollLeft
-      
-      imageContainers.forEach((element) => {
-        const elementRect = element.getBoundingClientRect()
-        const elementCenter = elementRect.left + elementRect.width / 2
-        const distance = Math.abs(elementCenter - containerCenter)
-        
-        if (distance < minDistance) {
-          minDistance = distance
-          closestElement = element
-          // Calculate the scroll position needed to center this element
-          const elementLeft = (element as HTMLElement).offsetLeft
-          const elementWidth = (element as HTMLElement).offsetWidth
-          const containerWidth = scrollContainer.clientWidth
-          targetScrollLeft = elementLeft - (containerWidth / 2) + (elementWidth / 2)
-        }
-      })
-      
-      // Smoothly scroll to the calculated position
-      if (closestElement && Math.abs(scrollContainer.scrollLeft - targetScrollLeft) > 1) {
-        scrollContainer.scrollTo({
-          left: Math.max(0, targetScrollLeft),
-          behavior: 'smooth'
-        })
-      }
-    }
-
-    const handleScroll = () => {
-      updateActiveElement()
-      
-      // Clear existing timeout
-      if (scrollTimeout) {
-        clearTimeout(scrollTimeout)
-      }
-      
-      // Set a new timeout to snap to center after scrolling stops
-      scrollTimeout = setTimeout(() => {
-        snapToCenter()
-      }, 50) // Wait 150ms after scroll stops
-    }
-
-    // Initial check
     updateActiveElement()
     
-    // Listen to scroll events
-    scrollContainer.addEventListener('scroll', handleScroll, { passive: true })
+    // Listen to scroll events with debounced handler
+    scrollContainer.addEventListener('scroll', debouncedHandleScroll, { passive: true })
     
     // Also listen to resize events in case container size changes
     const resizeObserver = new ResizeObserver(updateActiveElement)
     resizeObserver.observe(scrollContainer)
 
     return () => {
-      scrollContainer.removeEventListener('scroll', handleScroll)
-      if (scrollTimeout) {
-        clearTimeout(scrollTimeout)
+      scrollContainer.removeEventListener('scroll', debouncedHandleScroll)
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current)
+        scrollTimeoutRef.current = null
       }
       resizeObserver.disconnect()
     }
-  }, [placement?.products, isVisible])
+  }, [placement?.products, isVisible, debouncedHandleScroll])
 
   if (!shouldRender || !placement) return null
 
@@ -340,7 +406,7 @@ export default function ProductSelectionDrawer({
 
         {/* Snap Scrolling Image Gallery */}
         <div className="flex-1 overflow-hidden pb-10">
-          <div ref={scrollContainerRef} className="h-full min-h-[304px] overflow-x-auto overflow-y-hidden snap-x snap-mandatory snap-smooth hide-scrollbars">
+          <div ref={scrollContainerRef} className="h-full min-h-[324px] overflow-x-auto overflow-y-hidden snap-x snap-mandatory snap-smooth hide-scrollbars">
             <div className="flex h-full">
               {/* Left padding slide */}
               <div className="flex-shrink-0 flex flex-col items-center justify-center px-1.5 opacity-0" style={{ width: '60%' }}>
@@ -367,8 +433,9 @@ export default function ProductSelectionDrawer({
                         <Image
                           src={product?.productInfo?.productImage || product.src} // Fallback to src if productImage is not available
                           alt={product.name}
-                          fill
-                          className="object-contain"
+                          width={160}
+                          height={110}
+                          className="object-cover w-full h-full"
                           onError={(e) => {
                             // Fallback to grey placeholder on error
                             const target = e.target as HTMLImageElement
