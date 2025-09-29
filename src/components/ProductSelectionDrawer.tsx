@@ -81,7 +81,7 @@ export default function ProductSelectionDrawer({
         
         // Reset all elements to inactive state first
         imageContainers.forEach((element) => {
-          (element as HTMLElement).style.width = '60%'
+          (element as HTMLElement).style.width = '70%'
           const ctaButtons = element.querySelector('.cta-buttons') as HTMLElement
           if (ctaButtons) {
             ctaButtons.style.opacity = '0'
@@ -91,7 +91,7 @@ export default function ProductSelectionDrawer({
         
         // Set the closest element as active
         if (closestElement) {
-          (closestElement as HTMLElement).style.width = '70%'
+          (closestElement as HTMLElement).style.width = '80%'
           const ctaButtons = (closestElement as HTMLElement).querySelector('.cta-buttons') as HTMLElement
           if (ctaButtons) {
             ctaButtons.style.opacity = '1'
@@ -290,9 +290,9 @@ export default function ProductSelectionDrawer({
         // Also update the width for active element
         const allImageContainers = scrollContainer.querySelectorAll('.image-container')
         allImageContainers.forEach(container => {
-          (container as HTMLElement).style.width = '60%'
+          (container as HTMLElement).style.width = '70%'
         })
-        currentProductElement.style.width = '70%'
+        currentProductElement.style.width = '80%'
       }, 0)
     }
   }, [isVisible, placement])
@@ -328,7 +328,7 @@ export default function ProductSelectionDrawer({
       if (activeElement !== closestElement) {
         // Reset previous active element
         if (activeElement) {
-          (activeElement as HTMLElement).style.width = '60%'
+          (activeElement as HTMLElement).style.width = '70%'
           const prevCtaButtons = activeElement.querySelector('.cta-buttons') as HTMLElement
           if (prevCtaButtons) {
             prevCtaButtons.style.opacity = '0'
@@ -393,7 +393,25 @@ export default function ProductSelectionDrawer({
 
         {/* Drawer Header */}
         <div className="flex justify-between items-center px-6 py-4">
-          <h3 className="text-xl text-white">{placement.name}</h3>
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
+              <Image
+                src="/story-icon.png"
+                alt="Story icon"
+                width={44}
+                height={44}
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div className="flex flex-col">
+              <h3 className="text-xl text-white font-normal leading-tight" style={{ fontFamily: 'Belleza', letterSpacing: '-0.02em' }}>
+                {placement.name}
+              </h3>
+              <p className="text-xs text-[#FFEC8E] font-normal leading-tight" style={{ fontFamily: 'Belleza', letterSpacing: '-0.02em' }}>
+                Unfold The Story→
+              </p>
+            </div>
+          </div>
           <button 
             onClick={onClose}
             className="text-white/60 hover:text-white transition-colors"
@@ -406,10 +424,10 @@ export default function ProductSelectionDrawer({
 
         {/* Snap Scrolling Image Gallery */}
         <div className="flex-1 overflow-hidden pb-10">
-          <div ref={scrollContainerRef} className="h-full min-h-[324px] overflow-x-auto overflow-y-hidden snap-x snap-mandatory snap-smooth hide-scrollbars">
+          <div ref={scrollContainerRef} className="h-full min-h-[352px] overflow-x-auto overflow-y-hidden snap-x snap-mandatory snap-smooth hide-scrollbars">
             <div className="flex h-full">
               {/* Left padding slide */}
-              <div className="flex-shrink-0 flex flex-col items-center justify-center px-1.5 opacity-0" style={{ width: '60%' }}>
+              <div className="flex-shrink-0 flex flex-col items-center justify-center px-1.5 opacity-0" style={{ width: '70%' }}>
                 <div className="w-full max-w-sm invisible">
                   <div className="aspect-[16/11] relative bg-transparent rounded-2xl overflow-hidden mb-3"></div>
                   <div className="text-left mb-3 invisible">
@@ -425,7 +443,7 @@ export default function ProductSelectionDrawer({
               </div>
               
               {placement.products.map((product) => (
-                <div key={product.id} data-product-id={product.id} className="image-container flex-shrink-0 snap-center flex flex-col items-center justify-center px-1.5 transition-all duration-300 ease-out" style={{ width: '60%' }}>
+                <div key={product.id} data-product-id={product.id} className="image-container flex-shrink-0 snap-center flex flex-col items-center justify-center px-1.5 transition-all duration-300 ease-out" style={{ width: '70%' }}>
                   <div className="w-full max-w-sm">
                     {/* Product Image - Landscape aspect ratio */}
                     <div className="aspect-[16/11] relative bg-gray-200 rounded-2xl overflow-hidden mb-3">
@@ -458,7 +476,12 @@ export default function ProductSelectionDrawer({
                     
                     {/* Product Details */}
                     <div className="text-left mb-3">
-                      <h4 className="text-white text-base font-normal leading-tight mb-1">
+                      <h4 className="text-white text-base font-normal leading-tight mb-1 overflow-hidden" style={{
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        lineHeight: '1.3'
+                      }}>
                         {product?.productInfo?.productName || product.name}
                       </h4>
                       
@@ -482,8 +505,8 @@ export default function ProductSelectionDrawer({
                     </div>
                     
                     {/* Action Buttons - Three in a row */}
-                    <div className="cta-buttons flex gap-2 sm:gap-3 transition-opacity duration-300">
-                      <div className="flex-1 min-w-0 h-8 px-2 sm:px-2.5 py-1 bg-white rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden cursor-pointer hover:bg-gray-100 transition-colors active:scale-95">
+                    <div className="cta-buttons flex gap-3 transition-opacity duration-300 justify-center">
+                      <div className="h-8 sm:px-2.5 py-1 bg-white rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden cursor-pointer hover:bg-gray-100 transition-colors active:scale-95 min-w-[90px] px-[10px]">
                         <div className="text-[#333333] text-xs font-normal leading-none truncate">
                           Buy Now
                         </div>
@@ -491,7 +514,7 @@ export default function ProductSelectionDrawer({
 
                       <div
                         onClick={() => !product.visible && onProductSwitch(product)}
-                        className={`flex-1 min-w-0 h-8 px-2 sm:px-2.5 py-1 rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden transition-all ${
+                        className={`h-8 sm:px-2.5 py-1 rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden transition-all min-w-[90px] px-[10px] ${
                           product.visible
                             ? 'bg-gray-500 cursor-not-allowed'
                             : 'border border-white/30 active:scale-95 cursor-pointer'
@@ -500,22 +523,22 @@ export default function ProductSelectionDrawer({
                         <div className={`text-xs font-normal leading-none truncate ${
                           product.visible ? 'text-gray-300' : 'text-white'
                         }`}>
-                          {product.visible ? 'Selected' : 'Try On'}
+                          {product.visible ? 'Selected' : 'Try Now'}
                         </div>
                       </div>
                       
-                      <div className="flex-1 min-w-0 h-8 px-2 sm:px-2.5 py-1 border border-white/30 rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden cursor-pointer hover:bg-white/10 transition-colors active:scale-95">
+                      {/* <div className="flex-1 min-w-0 h-8 px-2 sm:px-2.5 py-1 border border-white/30 rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden cursor-pointer hover:bg-white/10 transition-colors active:scale-95">
                         <div className="text-white text-xs font-normal leading-none truncate">
                           Details
                         </div>
-                      </div>
+                      </div> */}
                     </div>
                   </div>
                 </div>
               ))}
               
               {/* Right padding slide */}
-              <div className="flex-shrink-0 flex flex-col items-center justify-center px-1.5 opacity-0" style={{ width: '60%' }}>
+              <div className="flex-shrink-0 flex flex-col items-center justify-center px-1.5 opacity-0" style={{ width: '70%' }}>
                 <div className="w-full max-w-sm invisible">
                   <div className="aspect-[16/11] relative bg-transparent rounded-2xl overflow-hidden mb-3"></div>
                   <div className="text-left mb-3 invisible">
