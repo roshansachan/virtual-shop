@@ -48,9 +48,8 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
 
   const searchParams = useSearchParams();
 
-  // Refs for idle timer and touch tracking
+  // Refs for idle timer
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   // Use ref to store callback to avoid dependency issues
   const onSelectedSpaceChangeRef = useRef(onSelectedSpaceChange);
@@ -71,25 +70,8 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     }, 3000);
   }, []);
 
-  const handleTouchStart = useCallback((e: TouchEvent) => {
-    const touch = e.touches[0];
-    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
-  }, []);
-
-  const handleTouchEnd = useCallback((e: TouchEvent) => {
-    if (!touchStartRef.current) return;
-
-    const touch = e.changedTouches[0];
-    const deltaX = Math.abs(touch.clientX - touchStartRef.current.x);
-    const deltaY = Math.abs(touch.clientY - touchStartRef.current.y);
-    const threshold = 10; // pixels
-
-    // Only show HUD if it's a tap (not a swipe/scroll)
-    if (deltaX < threshold && deltaY < threshold) {
-      showHud();
-    }
-
-    touchStartRef.current = null;
+  const handleClick = useCallback(() => {
+    showHud();
   }, [showHud]);
 
   // Set up idle timer on mount
@@ -103,19 +85,16 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     };
   }, [showHud]);
 
-  // Set up touch event listeners
+  // Set up click event listeners
   useEffect(() => {
-    const handleTouchStartEvent = (e: TouchEvent) => handleTouchStart(e);
-    const handleTouchEndEvent = (e: TouchEvent) => handleTouchEnd(e);
+    const handleClickEvent = () => handleClick();
 
-    document.addEventListener('touchstart', handleTouchStartEvent, { passive: true });
-    document.addEventListener('touchend', handleTouchEndEvent, { passive: true });
+    document.addEventListener('click', handleClickEvent, { passive: true });
 
     return () => {
-      document.removeEventListener('touchstart', handleTouchStartEvent);
-      document.removeEventListener('touchend', handleTouchEndEvent);
+      document.removeEventListener('click', handleClickEvent);
     };
-  }, [handleTouchStart, handleTouchEnd]);
+  }, [handleClick]);
 
   // Fetch scenes on component mount
   useEffect(() => {
@@ -219,12 +198,13 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
 
       {/* Room Navigation */}
       <div className={`transition-all duration-300 ease-in-out ${
-        showLeftPanel ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
+        showLeftPanel ? 'opacity-0 -translate-y-4' : 'opacity-100 translate-y-0'
       }`}>
         <RoomNavigation
           rooms={rooms}
           selectedRoomId={selectedSpace || ''}
           onRoomSelect={handleRoomSelect}
+          disablePointerEvents={showLeftPanel || !isHudVisible}
         />
       </div>
 
