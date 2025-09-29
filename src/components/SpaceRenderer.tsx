@@ -297,6 +297,23 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
     }
   }, [])
 
+  // Prevent pinch-to-zoom gestures
+  useEffect(() => {
+    const preventZoom = (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        e.preventDefault()
+      }
+    }
+
+    document.addEventListener('touchstart', preventZoom, { passive: false })
+    document.addEventListener('touchmove', preventZoom, { passive: false })
+
+    return () => {
+      document.removeEventListener('touchstart', preventZoom)
+      document.removeEventListener('touchmove', preventZoom)
+    }
+  }, [])
+
   // Enhanced smooth scrolling
   useEffect(() => {
     const container = scrollContainerRef.current
