@@ -133,11 +133,11 @@ export async function GET(
           x: position.x || 0,
           y: position.y || 0,
           productInfo: row.product_id ? {
-            product_id: row.product_id,
-            product_name: row.product_name,
-            original_price: row.original_price,
-            discount_percentage: row.discount_percentage,
-            product_image: row.product_image && !isS3Url(row.product_image)
+            productId: row.product_id,
+            productName: row.product_name,
+            originalPrice: row.original_price,
+            discountPercentage: row.discount_percentage,
+            productImage: row.product_image && !isS3Url(row.product_image)
               ? s3KeyToUrl(row.product_image)
               : row.product_image
           } : null

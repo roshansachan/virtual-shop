@@ -103,7 +103,6 @@ export interface Placement {
 export interface Product {
   id: string;
   src: string;
-  productImage?: string;
   name: string;
   width: number;
   height: number;
@@ -111,6 +110,13 @@ export interface Product {
   s3Key: string;
   x: number;
   y: number;
+  productInfo?: {
+    productId: string;
+    productName: string;
+    originalPrice: string;
+    discountPercentage: string;
+    productImage: string;
+  } 
 }
 
 export interface PlacedProduct {

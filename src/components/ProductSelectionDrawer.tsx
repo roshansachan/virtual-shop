@@ -312,7 +312,7 @@ export default function ProductSelectionDrawer({
                     <div className="aspect-[16/11] relative bg-gray-200 rounded-2xl overflow-hidden mb-3">
                       {product.src ? (
                         <Image
-                          src={product.productImage || product.src} // Fallback to src if productImage is not available
+                          src={product?.productInfo?.productImage || product.src} // Fallback to src if productImage is not available
                           alt={product.name}
                           fill
                           className="object-contain"
@@ -339,16 +339,25 @@ export default function ProductSelectionDrawer({
                     {/* Product Details */}
                     <div className="text-left mb-3">
                       <h4 className="text-white text-base font-normal leading-tight mb-1">
-                        {product.name}
+                        {product?.productInfo?.productName || product.name}
                       </h4>
                       
                       {/* Price */}
                       <div className="inline-flex gap-2 items-center">
-                        <span className="text-base font-normal text-white leading-tight mb-0.5">
-                          ₹1,299
-                        </span>
-                        <span className="text-white text-xs font-normal line-through leading-[14.40px]">$1800</span>
-                        <span className="text-white text-xs font-normal leading-[14.40px]">(40% off)</span>
+                        {product?.productInfo?.discountPercentage && product?.productInfo?.originalPrice && (
+                          <>
+                            <span className="text-base font-normal text-white leading-tight mb-0.5">
+                              ₹{Math.round(Number(product.productInfo.originalPrice) * (1 - Number(product.productInfo.discountPercentage) / 100))}
+                            </span>
+                            <span className="text-white text-xs font-normal line-through leading-[14.40px]">₹{product.productInfo.originalPrice}</span>
+                            <span className="text-white text-xs font-normal leading-[14.40px]">({product.productInfo.discountPercentage}% off)</span>
+                          </>
+                        )}
+                        {!product?.productInfo?.discountPercentage && product?.productInfo?.originalPrice && (
+                          <span className="text-base font-normal text-white leading-tight mb-0.5">
+                            ₹{product.productInfo.originalPrice}
+                          </span>
+                        )}
                       </div>
                     </div>
                     
