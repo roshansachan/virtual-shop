@@ -4,15 +4,18 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import Image from 'next/image'
 import type { Placement, Product } from '../types'
 
-// Debounce utility function
-function debounce<T extends (...args: any[]) => any>(
+// Throttle utility function for better scroll performance
+function throttle<T extends (...args: any[]) => any>(
   func: T,
-  wait: number
+  limit: number
 ): (...args: Parameters<T>) => void {
-  let timeout: NodeJS.Timeout | null = null
+  let inThrottle: boolean
   return (...args: Parameters<T>) => {
-    if (timeout) clearTimeout(timeout)
-    timeout = setTimeout(() => func(...args), wait)
+    if (!inThrottle) {
+      func(...args)
+      inThrottle = true
+      setTimeout(() => inThrottle = false, limit)
+    }
   }
 }
 
@@ -51,9 +54,9 @@ export default function ProductSelectionDrawer({
     setCurrentTransform(0)
   }, [])
 
-  // Debounced scroll handler to prevent rapid firing during fast scrolling
-  const debouncedHandleScroll = useMemo(
-    () => debounce(() => {
+  // Throttled scroll handler for smooth performance
+  const throttledHandleScroll = useMemo(
+    () => throttle(() => {
       const scrollContainer = scrollContainerRef.current
       if (!scrollContainer) return
 
@@ -79,28 +82,25 @@ export default function ProductSelectionDrawer({
           }
         })
         
-        // Reset all elements to inactive state first
+        // Update active state using CSS classes instead of direct style manipulation
         imageContainers.forEach((element) => {
-          (element as HTMLElement).style.width = '70%'
-          const ctaButtons = element.querySelector('.cta-buttons') as HTMLElement
-          if (ctaButtons) {
-            ctaButtons.style.opacity = '0'
-            ctaButtons.style.pointerEvents = 'none'
-          }
+          element.classList.remove('active')
         })
         
-        // Set the closest element as active
         if (closestElement) {
-          (closestElement as HTMLElement).style.width = '80%'
-          const ctaButtons = (closestElement as HTMLElement).querySelector('.cta-buttons') as HTMLElement
-          if (ctaButtons) {
-            ctaButtons.style.opacity = '1'
-            ctaButtons.style.pointerEvents = 'auto'
-          }
+          closestElement.classList.add('active')
         }
       }
 
-      const snapToCenter = () => {
+      updateActiveElement()
+      
+      // Clear existing timeout
+      if (scrollTimeout) {
+        clearTimeout(scrollTimeout)
+      }
+      
+      // Set a new timeout to snap to center after scrolling stops
+      scrollTimeoutRef.current = setTimeout(() => {
         if (!scrollContainer) return
 
         const containerRect = scrollContainer.getBoundingClientRect()
@@ -133,20 +133,8 @@ export default function ProductSelectionDrawer({
             behavior: 'smooth'
           })
         }
-      }
-
-      updateActiveElement()
-      
-      // Clear existing timeout
-      if (scrollTimeout) {
-        clearTimeout(scrollTimeout)
-      }
-      
-      // Set a new timeout to snap to center after scrolling stops
-      scrollTimeoutRef.current = setTimeout(() => {
-        snapToCenter()
-      }, 50)
-    }, 16),
+      }, 150) // Increased timeout for better UX
+    }, 16), // ~60fps throttling
     []
   )
 
@@ -269,30 +257,18 @@ export default function ProductSelectionDrawer({
         left: Math.max(0, scrollLeft)
       })
       
-      // After scrolling, ensure CTA buttons are properly shown/hidden
+      // After scrolling, ensure active state is properly set
       setTimeout(() => {
         scrollContainer.style.scrollBehavior = originalScrollBehavior
         
-        // Hide all CTA buttons first
-        const allCtaButtons = scrollContainer.querySelectorAll('.cta-buttons')
-        allCtaButtons.forEach(button => {
-          (button as HTMLElement).style.opacity = '0'
-          ;(button as HTMLElement).style.pointerEvents = 'none'
-        })
-        
-        // Show CTA buttons for the current product
-        const currentCtaButtons = currentProductElement.querySelector('.cta-buttons') as HTMLElement
-        if (currentCtaButtons) {
-          currentCtaButtons.style.opacity = '1'
-          currentCtaButtons.style.pointerEvents = 'auto'
-        }
-        
-        // Also update the width for active element
+        // Reset all elements to inactive state
         const allImageContainers = scrollContainer.querySelectorAll('.image-container')
         allImageContainers.forEach(container => {
-          (container as HTMLElement).style.width = '70%'
+          container.classList.remove('active')
         })
-        currentProductElement.style.width = '80%'
+        
+        // Set the current product as active
+        currentProductElement.classList.add('active')
       }, 0)
     }
   }, [isVisible, placement])
@@ -328,45 +304,35 @@ export default function ProductSelectionDrawer({
       if (activeElement !== closestElement) {
         // Reset previous active element
         if (activeElement) {
-          (activeElement as HTMLElement).style.width = '70%'
-          const prevCtaButtons = activeElement.querySelector('.cta-buttons') as HTMLElement
-          if (prevCtaButtons) {
-            prevCtaButtons.style.opacity = '0'
-            prevCtaButtons.style.pointerEvents = 'none'
-          }
+          activeElement.classList.remove('active')
         }
         
         // Set new active element
         activeElement = closestElement
         if (activeElement) {
-          (activeElement as HTMLElement).style.width = '70%'
-          const ctaButtons = (activeElement as HTMLElement).querySelector('.cta-buttons') as HTMLElement
-          if (ctaButtons) {
-            ctaButtons.style.opacity = '1'
-            ctaButtons.style.pointerEvents = 'auto'
-          }
+          activeElement.classList.add('active')
         }
       }
     }
 
     updateActiveElement()
     
-    // Listen to scroll events with debounced handler
-    scrollContainer.addEventListener('scroll', debouncedHandleScroll, { passive: true })
+    // Listen to scroll events with throttled handler
+    scrollContainer.addEventListener('scroll', throttledHandleScroll, { passive: true })
     
     // Also listen to resize events in case container size changes
     const resizeObserver = new ResizeObserver(updateActiveElement)
     resizeObserver.observe(scrollContainer)
 
     return () => {
-      scrollContainer.removeEventListener('scroll', debouncedHandleScroll)
+      scrollContainer.removeEventListener('scroll', throttledHandleScroll)
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current)
         scrollTimeoutRef.current = null
       }
       resizeObserver.disconnect()
     }
-  }, [placement?.products, isVisible, debouncedHandleScroll])
+  }, [placement?.products, isVisible, throttledHandleScroll])
 
   if (!shouldRender || !placement) return null
 
@@ -424,10 +390,10 @@ export default function ProductSelectionDrawer({
 
         {/* Snap Scrolling Image Gallery */}
         <div className="flex-1 overflow-hidden pb-10">
-          <div ref={scrollContainerRef} className="h-full min-h-[352px] overflow-x-auto overflow-y-hidden snap-x snap-mandatory snap-smooth hide-scrollbars">
+          <div ref={scrollContainerRef} className="h-full min-h-[320px] overflow-x-auto overflow-y-hidden snap-x snap-mandatory snap-smooth hide-scrollbars accelerated-scroll">
             <div className="flex h-full">
               {/* Left padding slide */}
-              <div className="flex-shrink-0 flex flex-col items-center justify-center px-1.5 opacity-0" style={{ width: '70%' }}>
+              <div className="flex-shrink-0 flex flex-col items-center justify-center px-4 pt-4 opacity-0" style={{ width: '70%' }}>
                 <div className="w-full max-w-sm invisible">
                   <div className="aspect-[16/11] relative bg-transparent rounded-2xl overflow-hidden mb-3"></div>
                   <div className="text-left mb-3 invisible">
@@ -443,69 +409,71 @@ export default function ProductSelectionDrawer({
               </div>
               
               {placement.products.map((product) => (
-                <div key={product.id} data-product-id={product.id} className="image-container flex-shrink-0 snap-center flex flex-col items-center justify-center px-1.5 transition-all duration-300 ease-out" style={{ width: '70%' }}>
+                <div key={product.id} data-product-id={product.id} className="image-container product-card flex-shrink-0 snap-center flex flex-col items-center justify-center px-4 pt-4" style={{ width: '70%' }}>
                   <div className="w-full max-w-sm">
-                    {/* Product Image - Landscape aspect ratio */}
-                    <div className="aspect-[16/11] relative bg-gray-200 rounded-2xl overflow-hidden mb-3">
-                      {product.src ? (
-                        <Image
-                          src={product?.productInfo?.productImage || product.src} // Fallback to src if productImage is not available
-                          alt={product.name}
-                          width={160}
-                          height={110}
-                          className="object-cover w-full h-full"
-                          onError={(e) => {
-                            // Fallback to grey placeholder on error
-                            const target = e.target as HTMLImageElement
-                            target.style.display = 'none'
-                            const parent = target.parentElement
-                            if (parent) {
-                              parent.innerHTML = '<div class="w-full h-full bg-gray-700 flex items-center justify-center"><svg class="w-16 h-16 text-gray-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd" /></svg></div>'
-                            }
-                          }}
-                        />
-                      ) : (
-                        // Grey placeholder for assets without src
-                        <div className="w-full h-full bg-gray-700 flex items-center justify-center">
-                          <svg className="w-16 h-16 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                      )}
-                    </div>
-                    
-                    {/* Product Details */}
-                    <div className="text-left mb-3">
-                      <h4 className="text-white text-base font-normal leading-tight mb-1 overflow-hidden" style={{
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        lineHeight: '1.3'
-                      }}>
-                        {product?.productInfo?.productName || product.name}
-                      </h4>
+                    <div className="image-aspect">
+                      {/* Product Image - Landscape aspect ratio */}
+                      <div className="aspect-[16/11] relative bg-gray-200 rounded-2xl overflow-hidden mb-3">
+                        {product.src ? (
+                          <Image
+                            src={product?.productInfo?.productImage || product.src} // Fallback to src if productImage is not available
+                            alt={product.name}
+                            width={160}
+                            height={110}
+                            className="object-cover w-full h-full"
+                            onError={(e) => {
+                              // Fallback to grey placeholder on error
+                              const target = e.target as HTMLImageElement
+                              target.style.display = 'none'
+                              const parent = target.parentElement
+                              if (parent) {
+                                parent.innerHTML = '<div class="w-full h-full bg-gray-700 flex items-center justify-center"><svg class="w-16 h-16 text-gray-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd" /></svg></div>'
+                              }
+                            }}
+                          />
+                        ) : (
+                          // Grey placeholder for assets without src
+                          <div className="w-full h-full bg-gray-700 flex items-center justify-center">
+                            <svg className="w-16 h-16 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
                       
-                      {/* Price */}
-                      <div className="inline-flex gap-2 items-center">
-                        {product?.productInfo?.discountPercentage && product?.productInfo?.originalPrice && (
-                          <>
+                      {/* Product Details */}
+                      <div className="text-left mb-3">
+                        <h4 className="text-white text-base font-normal leading-tight mb-1 overflow-hidden" style={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          lineHeight: '1.3'
+                        }}>
+                          {product?.productInfo?.productName || product.name}
+                        </h4>
+                        
+                        {/* Price */}
+                        <div className="inline-flex gap-2 items-center">
+                          {product?.productInfo?.discountPercentage && product?.productInfo?.originalPrice && (
+                            <>
+                              <span className="text-base font-normal text-white leading-tight mb-0.5">
+                                ${Math.round(Number(product.productInfo.originalPrice) * (1 - Number(product.productInfo.discountPercentage) / 100))}
+                              </span>
+                              <span className="text-white text-xs font-normal line-through leading-[14.40px]">${Math.round(Number(product.productInfo.originalPrice))}</span>
+                              <span className="text-white text-xs font-normal leading-[14.40px]">({Math.round(Number(product.productInfo.discountPercentage))}% off)</span>
+                            </>
+                          )}
+                          {!product?.productInfo?.discountPercentage && product?.productInfo?.originalPrice && (
                             <span className="text-base font-normal text-white leading-tight mb-0.5">
-                              ${Math.round(Number(product.productInfo.originalPrice) * (1 - Number(product.productInfo.discountPercentage) / 100))}
+                              ${Math.round(Number(product.productInfo.originalPrice))}
                             </span>
-                            <span className="text-white text-xs font-normal line-through leading-[14.40px]">${Math.round(Number(product.productInfo.originalPrice))}</span>
-                            <span className="text-white text-xs font-normal leading-[14.40px]">({Math.round(Number(product.productInfo.discountPercentage))}% off)</span>
-                          </>
-                        )}
-                        {!product?.productInfo?.discountPercentage && product?.productInfo?.originalPrice && (
-                          <span className="text-base font-normal text-white leading-tight mb-0.5">
-                            ${Math.round(Number(product.productInfo.originalPrice))}
-                          </span>
-                        )}
+                          )}
+                        </div>
                       </div>
                     </div>
                     
                     {/* Action Buttons - Three in a row */}
-                    <div className="cta-buttons flex gap-3 transition-opacity duration-300 justify-center">
+                    <div className="cta-buttons flex gap-3 transition-opacity duration-300 justify-center mt-6">
                       <div className="h-8 sm:px-2.5 py-1 bg-white rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden cursor-pointer hover:bg-gray-100 transition-colors active:scale-95 min-w-[90px] px-[10px]">
                         <div className="text-[#333333] text-xs font-normal leading-none truncate">
                           Buy Now
@@ -538,7 +506,7 @@ export default function ProductSelectionDrawer({
               ))}
               
               {/* Right padding slide */}
-              <div className="flex-shrink-0 flex flex-col items-center justify-center px-1.5 opacity-0" style={{ width: '70%' }}>
+              <div className="flex-shrink-0 flex flex-col items-center justify-center px-4 pt-4 opacity-0" style={{ width: '70%' }}>
                 <div className="w-full max-w-sm invisible">
                   <div className="aspect-[16/11] relative bg-transparent rounded-2xl overflow-hidden mb-3"></div>
                   <div className="text-left mb-3 invisible">
