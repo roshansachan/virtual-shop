@@ -266,6 +266,17 @@ function DesignStudioContent() {
     imageS3Key?: string;
   } | null>(null);
   
+  // Edit scene state
+  const [editingScene, setEditingScene] = useState<{
+    id: string;
+    dbId: string;
+    name: string;
+    type?: string;
+    backgroundImage?: string;
+    backgroundImageS3Key?: string;
+    theme_id?: number;
+  } | null>(null);
+  
   const [productImageForm, setProductImageForm] = useState({ name: '', image: '' });
   
   // Product upload state
@@ -882,6 +893,45 @@ function DesignStudioContent() {
   const handleCreateSpaceModalClose = useCallback(() => {
     setEditingSpace(null);
     setShowCreateSpace(false);
+  }, []);
+
+  // Handle edit scene
+  const handleEditScene = useCallback((scene: any) => {
+    setEditingScene({
+      id: scene.id,
+      dbId: scene.dbId || scene.id,
+      name: scene.name,
+      type: scene.type,
+      backgroundImage: scene.backgroundImage,
+      backgroundImageS3Key: scene.backgroundImageS3Key,
+      theme_id: scene.theme_id
+    });
+    setShowCreateScene(true); // Reuse the same modal
+  }, []);
+
+  // Handle scene updated (for edit mode)
+  const handleSceneUpdated = useCallback((updatedScene: Scene) => {
+    // Update the scene in local state
+    setScenes(prevScenes => prevScenes.map(scene => 
+      scene.dbId === updatedScene.dbId 
+        ? { ...scene, ...updatedScene }
+        : scene
+    ));
+    
+    // Close edit mode
+    setEditingScene(null);
+    setShowCreateScene(false);
+    
+    // Trigger refresh to get latest data
+    if (refreshScenes) {
+      refreshScenes();
+    }
+  }, [refreshScenes]);
+
+  // Handle modal close (reset scene edit state)
+  const handleCreateSceneModalClose = useCallback(() => {
+    setEditingScene(null);
+    setShowCreateScene(false);
   }, []);
 
   // Calculate placement position for new products
@@ -1677,6 +1727,7 @@ function DesignStudioContent() {
             }
           }}
           onShowCreateScene={() => setShowCreateScene(true)}
+          onEditScene={handleEditScene}
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
           onScenesLoaded={handleScenesLoaded}
@@ -2104,11 +2155,12 @@ function DesignStudioContent() {
         className="hidden"
       />
 
-      {/* Create Scene Modal */}
+      {/* Create/Edit Scene Modal */}
       <CreateSceneModal
         isOpen={showCreateScene}
-        onClose={() => setShowCreateScene(false)}
-        onSceneCreated={handleSceneCreated}
+        onClose={handleCreateSceneModalClose}
+        onSceneCreated={editingScene ? handleSceneUpdated : handleSceneCreated}
+        editingScene={editingScene}
       />
 
       {/* Create/Edit Space Modal */}

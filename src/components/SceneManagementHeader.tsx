@@ -9,6 +9,7 @@ interface SceneManagementHeaderProps {
   onSceneChange: (sceneId: string) => void;
   onSceneDelete: (sceneId: string) => void;
   onShowCreateScene: () => void;
+  onEditScene: (scene: Scene) => void;
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
   onScenesLoaded: (scenes: Scene[]) => void; // New callback to pass scenes to parent
@@ -20,6 +21,7 @@ export default function SceneManagementHeader({
   onSceneChange,
   onSceneDelete,
   onShowCreateScene,
+  onEditScene,
   sidebarCollapsed,
   onToggleSidebar,
   onScenesLoaded,
@@ -180,6 +182,19 @@ export default function SceneManagementHeader({
                     {/* Database-only scenes */}
                     
                   </select>
+                  <button
+                    onClick={() => {
+                      const sceneToEdit = allScenes.find(scene => scene.id === currentSceneId);
+                      if (sceneToEdit) {
+                        onEditScene(sceneToEdit);
+                      }
+                    }}
+                    disabled={!currentSceneId || loadingScenes}
+                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Edit scene"
+                  >
+                    ✏️
+                  </button>
                   <button
                     onClick={() => handleSceneDelete(currentSceneId)}
                     disabled={!currentSceneId || loadingScenes}

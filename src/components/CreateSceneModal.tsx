@@ -8,10 +8,19 @@ interface CreateSceneModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSceneCreated: (scene: Scene) => void;
+  editingScene?: {
+    id: string;
+    dbId: string;
+    name: string;
+    type?: string;
+    backgroundImage?: string;
+    backgroundImageS3Key?: string;
+    theme_id?: number;
+  } | null;
 }
 
-export default function CreateSceneModal({ isOpen, onClose, onSceneCreated }: CreateSceneModalProps) {
-  // Scene creation state
+export default function CreateSceneModal({ isOpen, onClose, onSceneCreated, editingScene }: CreateSceneModalProps) {
+  // Scene creation/editing state
   const [newSceneName, setNewSceneName] = useState('');
   const [newSceneImage, setNewSceneImage] = useState('');
   const [newSceneImageS3Key, setNewSceneImageS3Key] = useState('');
@@ -20,6 +29,23 @@ export default function CreateSceneModal({ isOpen, onClose, onSceneCreated }: Cr
   const [newSceneThemeId, setNewSceneThemeId] = useState<string>('');
   const [newSceneType, setNewSceneType] = useState<string>('');
   const [availableThemes, setAvailableThemes] = useState<DBTheme[]>([]);
+
+  // Update state when editingScene changes
+  useEffect(() => {
+    if (editingScene) {
+      setNewSceneName(editingScene.name);
+      setNewSceneImage(editingScene.backgroundImage || '');
+      setNewSceneImageS3Key(editingScene.backgroundImageS3Key || '');
+      setNewSceneType(editingScene.type || '');
+      setNewSceneThemeId(editingScene.theme_id?.toString() || '');
+    } else {
+      setNewSceneName('');
+      setNewSceneImage('');
+      setNewSceneImageS3Key('');
+      setNewSceneType('');
+      setNewSceneThemeId('');
+    }
+  }, [editingScene]);
 
   // Load themes for scene creation modal
   const loadAvailableThemes = useCallback(async () => {
@@ -100,39 +126,70 @@ export default function CreateSceneModal({ isOpen, onClose, onSceneCreated }: Cr
     }
   }, []);
 
-  // Create new scene
-  const createScene = useCallback(async () => {
+  // Create or update scene
+  const createOrUpdateScene = useCallback(async () => {
     if (!newSceneName.trim()) return;
     
     try {
-      const newScene: Scene = {
-        id: Date.now().toString(),
-        name: newSceneName.trim(),
-        type: newSceneType || undefined,
-        theme_id: newSceneThemeId ? parseInt(newSceneThemeId) : undefined,
-        backgroundImage: newSceneImage,
-        backgroundImageS3Key: newSceneImageS3Key,
-        backgroundImageSize: { width: 1200, height: 800 }, // Default size, will be updated when image loads
-        spaces: []
-      };
-      
-      // Save scene to file system
-      await fetch('/api/scenes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newScene),
-      });
-      
-      // Notify parent component
-      onSceneCreated(newScene);
-      
-      // Reset modal state and close
-      resetModal();
+      if (editingScene) {
+        // Update existing scene
+        const response = await fetch('/api/scenes', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: parseInt(editingScene.dbId),
+            name: newSceneName.trim(),
+            type: newSceneType || null,
+            backgroundImageS3Key: newSceneImageS3Key || null,
+            theme_id: newSceneThemeId ? parseInt(newSceneThemeId) : null
+          })
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success) {
+            // Notify parent component with updated scene
+            onSceneCreated(result.data);
+            
+            // Reset modal state and close
+            resetModal();
+          } else {
+            throw new Error(result.error || 'Failed to update scene');
+          }
+        } else {
+          throw new Error('Failed to update scene');
+        }
+      } else {
+        // Create new scene
+        const newScene: Scene = {
+          id: Date.now().toString(),
+          name: newSceneName.trim(),
+          type: newSceneType || undefined,
+          theme_id: newSceneThemeId ? parseInt(newSceneThemeId) : undefined,
+          backgroundImage: newSceneImage,
+          backgroundImageS3Key: newSceneImageS3Key,
+          backgroundImageSize: { width: 1200, height: 800 },
+          spaces: []
+        };
+        
+        // Save scene to database
+        await fetch('/api/scenes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newScene),
+        });
+        
+        // Notify parent component
+        onSceneCreated(newScene);
+        
+        // Reset modal state and close
+        resetModal();
+      }
     } catch (error) {
-      console.error('Error creating scene:', error);
-      alert('Failed to create scene. Please try again.');
+      console.error('Error saving scene:', error);
+      alert(`Failed to ${editingScene ? 'update' : 'create'} scene: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-  }, [newSceneName, newSceneType, newSceneThemeId, newSceneImage, newSceneImageS3Key, onSceneCreated]);
+  }, [newSceneName, newSceneType, newSceneThemeId, newSceneImage, newSceneImageS3Key, editingScene, onSceneCreated]);
 
   // Reset all form fields
   const resetModal = useCallback(() => {
@@ -157,7 +214,7 @@ export default function CreateSceneModal({ isOpen, onClose, onSceneCreated }: Cr
       {/* Create Scene Modal */}
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-          <h2 className="text-xl font-bold mb-4">Create New Scene</h2>
+          <h2 className="text-xl font-bold mb-4">{editingScene ? 'Edit Scene' : 'Create New Scene'}</h2>
           
           <div className="space-y-4">
             {/* Scene Name Input */}
@@ -215,7 +272,7 @@ export default function CreateSceneModal({ isOpen, onClose, onSceneCreated }: Cr
               </select>
             </div>
             
-            {/* Scene Background Image Upload */}
+              {/* Scene Background Image Upload */}
             <div>
               <label htmlFor="sceneImage" className="block text-sm font-medium text-gray-700 mb-1">
                 Background Image
@@ -226,7 +283,7 @@ export default function CreateSceneModal({ isOpen, onClose, onSceneCreated }: Cr
                   disabled={uploadingSceneImage}
                   className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50 text-sm"
                 >
-                  {uploadingSceneImage ? 'Uploading...' : 'Choose Image'}
+                  {uploadingSceneImage ? 'Uploading...' : (editingScene ? 'Change Image' : 'Choose Image')}
                 </button>
                 {uploadingSceneImage && (
                   <div className="flex-1">
@@ -242,13 +299,19 @@ export default function CreateSceneModal({ isOpen, onClose, onSceneCreated }: Cr
               </div>
               
               {/* Scene Image Preview */}
-              {newSceneImage && (
+              {(newSceneImage || (editingScene && editingScene.backgroundImage)) && (
                 <div className="mt-3">
                   <img
-                    src={newSceneImage}
+                    src={newSceneImage || editingScene?.backgroundImage || ''}
                     alt="Scene preview"
                     className="w-full h-32 object-cover rounded-md border border-gray-300"
                   />
+                  {editingScene && !newSceneImage && (
+                    <p className="text-xs text-gray-500 mt-1">Current background image</p>
+                  )}
+                  {newSceneImage && editingScene && (
+                    <p className="text-xs text-green-600 mt-1">New background image (click Update Scene to save)</p>
+                  )}
                 </div>
               )}
             </div>
@@ -263,11 +326,11 @@ export default function CreateSceneModal({ isOpen, onClose, onSceneCreated }: Cr
               Cancel
             </button>
             <button
-              onClick={createScene}
+              onClick={createOrUpdateScene}
               disabled={!newSceneName.trim() || uploadingSceneImage}
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Create Scene
+              {editingScene ? 'Update Scene' : 'Create Scene'}
             </button>
           </div>
         </div>

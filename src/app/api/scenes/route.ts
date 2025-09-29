@@ -120,3 +120,74 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+// PUT - Update existing scene in database
+export async function PUT(request: NextRequest) {
+  try {
+    const sceneData = await request.json();
+    const { id, name, type, backgroundImageS3Key, theme_id } = sceneData;
+    
+    // Validate required fields
+    if (!id || typeof id !== 'number') {
+      return NextResponse.json(
+        { success: false, error: 'id is required and must be a number' },
+        { status: 400 }
+      );
+    }
+    
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'name is required and must be a non-empty string' },
+        { status: 400 }
+      );
+    }
+    
+    // Update scene in database
+    const updateResult = await query(
+      `UPDATE scenes 
+       SET name = $1, type = $2, image = $3, theme_id = $4, updated_at = NOW()
+       WHERE id = $5 
+       RETURNING id, name, type, image, theme_id, created_at, updated_at`,
+      [
+        name.trim(),
+        type || null,
+        backgroundImageS3Key || null,
+        theme_id || null,
+        id
+      ]
+    );
+    
+    if (updateResult.rows.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Scene not found' },
+        { status: 404 }
+      );
+    }
+    
+    const dbScene: DBScene = updateResult.rows[0];
+    
+    // Return the updated scene data
+    const updatedScene = {
+      id: dbScene.id.toString(),
+      name: dbScene.name,
+      type: dbScene.type || undefined,
+      backgroundImage: dbScene.image ? s3KeyToUrl(dbScene.image) : '',
+      backgroundImageSize: { width: 1920, height: 1080 },
+      backgroundImageS3Key: dbScene.image || undefined,
+      theme_id: dbScene.theme_id,
+      dbId: dbScene.id.toString(),
+      spaces: []
+    };
+    
+    return NextResponse.json({ 
+      success: true, 
+      data: updatedScene
+    });
+  } catch (error) {
+    console.error('Failed to update scene in database:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to update scene in database' },
+      { status: 500 }
+    );
+  }
+}
