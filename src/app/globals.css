@@ -95,6 +95,15 @@ body {
   background: rgba(0, 0, 0, 0.05);
 }
 
+/* Hide scrollbars completely across all browsers */
+.hide-scrollbars {
+  scrollbar-width: none; /* Firefox */
+}
+
+.hide-scrollbars::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge */
+}
+
 /* Line clamp utilities */
 .line-clamp-2 {
   display: -webkit-box;

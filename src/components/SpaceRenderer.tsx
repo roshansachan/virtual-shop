@@ -300,12 +300,12 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
   // Enhanced smooth scrolling
   useEffect(() => {
     const container = scrollContainerRef.current
-    if (!container) return
+    if (!container || showDrawer) return
 
     container.style.scrollBehavior = 'smooth'
     // @ts-expect-error - WebKit specific property for smooth scrolling
     container.style.webkitOverflowScrolling = 'touch'
-    container.style.overscrollBehaviorX = 'contain'
+    container.style.overscrollBehavior = 'none'
     
     let scrollTimeout: NodeJS.Timeout
     
@@ -346,7 +346,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
       container.removeEventListener('touchmove', handleScrollEnd)
       clearTimeout(scrollTimeout)
     }
-  }, [space])
+  }, [space, showDrawer])
 
   if (loading) {
     return (
@@ -403,11 +403,11 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
       {/* Horizontal scroll container */}
       <div 
         ref={scrollContainerRef}
-        className="w-full h-full overflow-auto"
+        className={`w-full h-full hide-scrollbars ${showDrawer ? 'overflow-hidden pointer-events-none' : 'overflow-auto'}`}
         style={{
           scrollBehavior: 'smooth',
           WebkitOverflowScrolling: 'touch',
-          overscrollBehaviorX: 'contain',
+          overscrollBehavior: 'none',
           scrollSnapType: 'x proximity',
         }}
       >
