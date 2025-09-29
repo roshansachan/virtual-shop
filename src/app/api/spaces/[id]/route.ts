@@ -40,6 +40,7 @@ export async function GET(
         s.updated_at AS scene_updated_at,
         p.id AS placement_id,
         p.name AS placement_name,
+        p.art_story_id AS placement_art_story_id,
         p.created_at AS placement_created_at,
         p.updated_at AS placement_updated_at,
         pi.id AS placement_image_id,
@@ -74,7 +75,23 @@ export async function GET(
         pi.id
     `;
 
-    const result = await query(queryText, [spaceId]);
+    let result;
+    try {
+      result = await query(queryText, [spaceId]);
+    } catch (error) {
+      // If the query fails (possibly due to missing art_story_id column), try without it
+      if (error instanceof Error && error.message.includes('art_story_id')) {
+        console.log('art_story_id column not found, falling back to query without it');
+        const fallbackQueryText = queryText.replace(
+          'p.art_story_id AS placement_art_story_id,',
+          'NULL AS placement_art_story_id,'
+        );
+        result = await query(fallbackQueryText, [spaceId]);
+      } else {
+        throw error;
+      }
+    }
+    
     console.log('Space query result:', result.rows);
     if (result.rows.length === 0) {
       return NextResponse.json(
@@ -107,6 +124,7 @@ export async function GET(
         placementsMap.set(placementId, {
           id: placementId.toString(),
           name: row.placement_name,
+          art_story_id: row.placement_art_story_id,
           expanded: true, // Default to expanded
           visible: true,  // Default to visible
           products: []
@@ -131,16 +149,7 @@ export async function GET(
           width: position.width || 100,
           height: position.height || 100,
           x: position.x || 0,
-          y: position.y || 0,
-          productInfo: row.product_id ? {
-            productId: row.product_id,
-            productName: row.product_name,
-            originalPrice: row.original_price,
-            discountPercentage: row.discount_percentage,
-            productImage: row.product_image && !isS3Url(row.product_image)
-              ? s3KeyToUrl(row.product_image)
-              : row.product_image
-          } : null
+          y: position.y || 0
         });
       }
     });

@@ -12,6 +12,7 @@ import ThemeManagementModal from '@/components/ThemeManagementModal';
 import CreateSceneModal from '@/components/CreateSceneModal';
 import CreateSpaceModal from '@/components/CreateSpaceModal';
 import AddProductImageModal from '@/components/AddProductImageModal';
+import PlacementModal from '@/components/PlacementModal';
 import SceneManagementHeader from '@/components/SceneManagementHeader';
 import { generateS3Url } from '@/lib/s3-utils';
 
@@ -239,6 +240,13 @@ function DesignStudioContent() {
   const [newPlacementName, setNewPlacementName] = useState('');
   const [showCreateSpace, setShowCreateSpace] = useState(false);
   const [showCreatePlacement, setShowCreatePlacement] = useState(false);
+  const [showPlacementModal, setShowPlacementModal] = useState(false);
+  const [editingPlacement, setEditingPlacement] = useState<{
+    id: string;
+    dbId: string;
+    name: string;
+    art_story_id?: number | null;
+  } | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showSceneMenu, setShowSceneMenu] = useState(false);
   const [showCreateScene, setShowCreateScene] = useState(false);
@@ -249,12 +257,6 @@ function DesignStudioContent() {
     name: string;
     image: string;
     product_id?: number | null;
-  } | null>(null);
-  
-  // Edit placement name state
-  const [editingPlacementName, setEditingPlacementName] = useState<{
-    id: string;
-    name: string;
   } | null>(null);
   
   // Edit space state
@@ -494,6 +496,7 @@ function DesignStudioContent() {
             return {
               id: placement.id.toString(),
               name: placement.name,
+              art_story_id: placement.art_story_id,
               products: [], // Keep for compatibility
               placementImages,
               activeProductImageId,
@@ -830,7 +833,7 @@ function DesignStudioContent() {
         })));
         
         // Close editing mode
-        setEditingPlacementName(null);
+        setEditingPlacement(null);
       } else {
         alert(`Failed to update placement name: ${data.error}`);
       }
@@ -842,23 +845,28 @@ function DesignStudioContent() {
 
   // Handle edit placement name
   const handleEditPlacementName = useCallback((placement: any) => {
-    setEditingPlacementName({
-      id: placement.dbId,
-      name: placement.name
+    setEditingPlacement({
+      id: placement.id,
+      dbId: placement.dbId,
+      name: placement.name,
+      art_story_id: placement.art_story_id
     });
+    setShowPlacementModal(true);
   }, []);
 
-  // Handle save placement name
-  const handleSavePlacementName = useCallback(() => {
-    if (editingPlacementName && editingPlacementName.name.trim()) {
-      updatePlacementName(editingPlacementName.id, editingPlacementName.name.trim());
+  // Handle create placement
+  const handleCreatePlacement = useCallback(() => {
+    setEditingPlacement(null);
+    setShowPlacementModal(true);
+  }, []);
+
+  // Handle placement modal success
+  const handlePlacementModalSuccess = useCallback(() => {
+    const selectedSpace = getSelectedSpace();
+    if (selectedSpace && selectedSpace.dbId) {
+      fetchPlacementsForSpace(selectedSpace.dbId);
     }
-  }, [editingPlacementName, updatePlacementName]);
-
-  // Handle cancel edit placement name
-  const handleCancelEditPlacementName = useCallback(() => {
-    setEditingPlacementName(null);
-  }, []);
+  }, [getSelectedSpace, fetchPlacementsForSpace]);
 
   // Handle edit space
   const handleEditSpace = useCallback((space: any) => {
@@ -1794,43 +1802,12 @@ function DesignStudioContent() {
                             <div className="flex items-center justify-between mb-3 mt-2">
                               <h4 className="font-medium text-gray-700">Placements</h4>
                               <button
-                                onClick={() => setShowCreatePlacement(true)}
+                                onClick={handleCreatePlacement}
                                 className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
                               >
                                 Create Placement
                               </button>
                             </div>
-
-                            {/* Create Placement Modal */}
-                            {showCreatePlacement && (
-                              <div className="border border-gray-300 rounded-lg p-3 bg-gray-50 mb-3">
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="text"
-                                    value={newPlacementName}
-                                    onChange={(e) => setNewPlacementName(e.target.value)}
-                                    placeholder="Enter placement name..."
-                                    className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
-                                    onKeyPress={(e) => e.key === 'Enter' && createPlacement()}
-                                  />
-                                  <button
-                                    onClick={createPlacement}
-                                    className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
-                                  >
-                                    Create
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setShowCreatePlacement(false);
-                                      setNewPlacementName('');
-                                    }}
-                                    className="px-2 py-1 bg-gray-500 text-white rounded text-xs hover:bg-gray-600"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              </div>
-                            )}
 
                             {/* Placements List */}
                             {getSelectedSpacePlacements().length === 0 ? (
@@ -1850,57 +1827,18 @@ function DesignStudioContent() {
                                       className="flex items-center gap-2 flex-1 cursor-pointer"
                                       onClick={() => setSelectedPlacementId(selectedPlacementId === placement.id ? '' : placement.id)}
                                     >
-                                      {editingPlacementName?.id === placement.dbId ? (
-                                        <div className="flex items-center gap-2 flex-1" onClick={(e) => e.stopPropagation()}>
-                                          <input
-                                            type="text"
-                                            value={editingPlacementName?.name || ''}
-                                            onChange={(e) => setEditingPlacementName(editingPlacementName ? {
-                                              id: editingPlacementName.id,
-                                              name: e.target.value
-                                            } : null)}
-                                            className="text-sm font-medium border border-gray-300 rounded px-2 py-1 flex-1"
-                                            onKeyDown={(e) => {
-                                              if (e.key === 'Enter') {
-                                                handleSavePlacementName();
-                                              } else if (e.key === 'Escape') {
-                                                handleCancelEditPlacementName();
-                                              }
-                                            }}
-                                            onBlur={handleSavePlacementName}
-                                            autoFocus
-                                          />
-                                          <button
-                                            onClick={handleSavePlacementName}
-                                            className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700"
-                                            title="Save name"
-                                          >
-                                            ✓
-                                          </button>
-                                          <button
-                                            onClick={handleCancelEditPlacementName}
-                                            className="text-xs px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
-                                            title="Cancel edit"
-                                          >
-                                            ✕
-                                          </button>
-                                        </div>
-                                      ) : (
-                                        <span className="text-sm font-medium">{placement.name}</span>
-                                      )}
+                                      <span className="text-sm font-medium">{placement.name}</span>                                    
                                     </div>
-                                    {editingPlacementName?.id !== placement.dbId && (
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleEditPlacementName(placement);
-                                        }}
-                                        className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 ml-2"
-                                        title="Edit placement name"
-                                      >
-                                        ✏️
-                                      </button>
-                                    )}
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleEditPlacementName(placement);
+                                      }}
+                                      className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 ml-2"
+                                      title="Edit placement"
+                                    >
+                                      ✏️
+                                    </button>
                                   </div>
 
                                   {/* Selected Placement: Show Product Upload */}
@@ -2194,6 +2132,19 @@ function DesignStudioContent() {
         sceneId={currentSceneId}
         editMode={true}
         existingPlacementImage={editingPlacementImage}
+      />
+
+      {/* Placement Modal */}
+      <PlacementModal
+        isOpen={showPlacementModal}
+        onClose={() => {
+          setShowPlacementModal(false);
+          setEditingPlacement(null);
+        }}
+        onSuccess={handlePlacementModalSuccess}
+        spaceId={getSelectedSpace()?.dbId || ''}
+        editMode={!!editingPlacement}
+        existingPlacement={editingPlacement}
       />
     </div>
   );

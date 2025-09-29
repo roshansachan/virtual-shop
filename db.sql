@@ -40,13 +40,15 @@ CREATE INDEX IF NOT EXISTS idx_spaces_scene_id ON spaces(scene_id);
 
 -- 4) PLACEMENTS (many → one SPACE)
 CREATE TABLE IF NOT EXISTS placements (
-  id          BIGSERIAL PRIMARY KEY,
-  space_id    BIGINT REFERENCES spaces(id) ON DELETE CASCADE,
-  name        TEXT,
-  created_at  TIMESTAMPTZ DEFAULT NOW(),
-  updated_at  TIMESTAMPTZ DEFAULT NOW()
+  id           BIGSERIAL PRIMARY KEY,
+  space_id     BIGINT REFERENCES spaces(id) ON DELETE CASCADE,
+  name         TEXT,
+  art_story_id BIGINT REFERENCES art_stories(id) ON DELETE SET NULL,
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_placements_space_id ON placements(space_id);
+CREATE INDEX IF NOT EXISTS idx_placements_art_story_id ON placements(art_story_id);
 
 -- 5) PRODUCTS (reusable)
 CREATE TABLE IF NOT EXISTS products (

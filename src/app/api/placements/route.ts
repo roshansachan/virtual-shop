@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, testConnection } from '@/lib/database';
-import type { DBPlacement } from '@/types';
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,29 +18,34 @@ export async function GET(request: NextRequest) {
 
     let queryText = `
       SELECT 
-        id,
-        space_id,
-        name,
-        created_at,
-        updated_at
-      FROM placements
+        p.id,
+        p.space_id,
+        p.name,
+        p.created_at,
+        p.updated_at,
+        a.id as art_story_id,
+        a.title as art_story_title
+      FROM placements p
+      LEFT JOIN art_stories a ON p.art_story_id = a.id
     `;
     const queryParams: any[] = [];
 
     if (spaceId) {
-      queryText += ' WHERE space_id = $1';
+      queryText += ' WHERE p.space_id = $1';
       queryParams.push(parseInt(spaceId));
     }
 
-    queryText += ' ORDER BY created_at DESC';
+    queryText += ' ORDER BY p.created_at DESC';
 
     // Query placements
     const result = await query(queryText, queryParams);
 
-    const placements: DBPlacement[] = result.rows.map(row => ({
+    const placements = result.rows.map(row => ({
       id: row.id,
       space_id: row.space_id,
       name: row.name,
+      art_story_id: row.art_story_id,
+      art_story_title: row.art_story_title,
       created_at: row.created_at,
       updated_at: row.updated_at
     }));
@@ -74,7 +78,7 @@ export async function POST(request: NextRequest) {
 
     // Parse request body
     const body = await request.json();
-    const { space_id, name } = body;
+    const { space_id, name, art_story_id } = body;
 
     // Validate required fields
     if (!space_id || typeof space_id !== 'number') {
@@ -93,18 +97,20 @@ export async function POST(request: NextRequest) {
 
     // Insert new placement
     const result = await query(`
-      INSERT INTO placements (space_id, name)
-      VALUES ($1, $2)
-      RETURNING id, space_id, name, created_at, updated_at
+      INSERT INTO placements (space_id, name, art_story_id)
+      VALUES ($1, $2, $3)
+      RETURNING id, space_id, name, art_story_id, created_at, updated_at
     `, [
       space_id,
-      name.trim()
+      name.trim(),
+      art_story_id || null
     ]);
 
-    const newPlacement: DBPlacement = {
+    const newPlacement = {
       id: result.rows[0].id,
       space_id: result.rows[0].space_id,
       name: result.rows[0].name,
+      art_story_id: result.rows[0].art_story_id,
       created_at: result.rows[0].created_at,
       updated_at: result.rows[0].updated_at
     };
@@ -121,84 +127,13 @@ export async function POST(request: NextRequest) {
     // Handle foreign key constraint violations
     if (error instanceof Error && error.message.includes('violates foreign key constraint')) {
       return NextResponse.json(
-        { success: false, error: 'Invalid space_id: space does not exist' },
+        { success: false, error: 'Invalid space_id or art_story_id' },
         { status: 400 }
       );
     }
 
     return NextResponse.json(
       { success: false, error: 'Failed to create placement' },
-      { status: 500 }
-    );
-  }
-}
-
-export async function PUT(request: NextRequest) {
-  try {
-    // Test database connection
-    const isConnected = await testConnection();
-    if (!isConnected) {
-      return NextResponse.json(
-        { success: false, error: 'Database connection failed' },
-        { status: 500 }
-      );
-    }
-
-    // Parse request body
-    const body = await request.json();
-    const { id, name } = body;
-
-    // Validate required fields
-    if (!id || typeof id !== 'number') {
-      return NextResponse.json(
-        { success: false, error: 'id is required and must be a number' },
-        { status: 400 }
-      );
-    }
-
-    if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'Name is required and must be a non-empty string' },
-        { status: 400 }
-      );
-    }
-
-    // Update placement name
-    const result = await query(`
-      UPDATE placements 
-      SET name = $1, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2
-      RETURNING id, space_id, name, created_at, updated_at
-    `, [
-      name.trim(),
-      id
-    ]);
-
-    if (result.rows.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'Placement not found' },
-        { status: 404 }
-      );
-    }
-
-    const updatedPlacement: DBPlacement = {
-      id: result.rows[0].id,
-      space_id: result.rows[0].space_id,
-      name: result.rows[0].name,
-      created_at: result.rows[0].created_at,
-      updated_at: result.rows[0].updated_at
-    };
-
-    return NextResponse.json({
-      success: true,
-      data: updatedPlacement,
-      message: 'Placement updated successfully'
-    });
-
-  } catch (error) {
-    console.error('Error updating placement:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to update placement' },
       { status: 500 }
     );
   }
