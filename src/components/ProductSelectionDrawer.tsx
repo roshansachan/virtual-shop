@@ -4,19 +4,19 @@ import React, { useEffect, useRef, useState, useCallback } from 'react'
 import Image from 'next/image'
 import type { Placement, Product } from '../types'
 
-interface ImageSelectionDrawerProps {
+interface ProductSelectionDrawerProps {
   isOpen: boolean
   placement: Placement | null
   onClose: () => void
   onProductSwitch: (product: Product) => void
 }
 
-export default function ImageSelectionDrawer({
+export default function ProductSelectionDrawer({
   isOpen,
   placement,
   onClose,
   onProductSwitch
-}: ImageSelectionDrawerProps) {
+}: ProductSelectionDrawerProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const drawerRef = useRef<HTMLDivElement>(null)
   const dragHandleRef = useRef<HTMLDivElement>(null)
@@ -122,6 +122,30 @@ export default function ImageSelectionDrawer({
       drawerRef.current.style.transition = ''
     }
   }, [isOpen])
+
+  // Scroll current product into view when drawer opens
+  useEffect(() => {
+    if (!isOpen || !placement || !scrollContainerRef.current) return
+
+    const currentProduct = placement.products.find(product => product.visible)
+    if (!currentProduct) return
+
+    const scrollContainer = scrollContainerRef.current
+    const currentProductElement = scrollContainer.querySelector(`[data-product-id="${currentProduct.id}"]`) as HTMLElement
+    
+    if (currentProductElement) {
+      // Calculate the scroll position to center the current product
+      const containerWidth = scrollContainer.clientWidth
+      const elementWidth = currentProductElement.offsetWidth
+      const elementLeft = currentProductElement.offsetLeft
+      const scrollLeft = elementLeft - (containerWidth / 2) + (elementWidth / 2)
+      
+      scrollContainer.scrollTo({
+        left: Math.max(0, scrollLeft),
+        behavior: 'smooth'
+      })
+    }
+  }, [isOpen, placement])
 
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current
@@ -242,13 +266,13 @@ export default function ImageSelectionDrawer({
               </div>
               
               {placement.products.map((product) => (
-                <div key={product.id} className="image-container flex-shrink-0 snap-center flex flex-col items-center justify-center px-1.5 transition-all duration-300 ease-out" style={{ width: '60%' }}>
+                <div key={product.id} data-product-id={product.id} className="image-container flex-shrink-0 snap-center flex flex-col items-center justify-center px-1.5 transition-all duration-300 ease-out" style={{ width: '60%' }}>
                   <div className="w-full max-w-sm">
                     {/* Product Image - Landscape aspect ratio */}
                     <div className="aspect-[16/11] relative bg-gray-200 rounded-2xl overflow-hidden mb-6">
                       {product.src ? (
                         <Image
-                          src={product.src}
+                          src={product.productImage || product.src} // Fallback to src if productImage is not available
                           alt={product.name}
                           fill
                           className="object-contain"
