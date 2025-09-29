@@ -75,7 +75,7 @@ export async function GET(
     `;
 
     const result = await query(queryText, [spaceId]);
-
+    console.log('Space query result:', result.rows);
     if (result.rows.length === 0) {
       return NextResponse.json(
         { success: false, error: 'Space not found' },
@@ -131,7 +131,16 @@ export async function GET(
           width: position.width || 100,
           height: position.height || 100,
           x: position.x || 0,
-          y: position.y || 0
+          y: position.y || 0,
+          productInfo: row.product_id ? {
+            product_id: row.product_id,
+            product_name: row.product_name,
+            original_price: row.original_price,
+            discount_percentage: row.discount_percentage,
+            product_image: row.product_image && !isS3Url(row.product_image)
+              ? s3KeyToUrl(row.product_image)
+              : row.product_image
+          } : null
         });
       }
     });
