@@ -467,15 +467,15 @@ export default function ProductSelectionDrawer({
                         {product?.productInfo?.discountPercentage && product?.productInfo?.originalPrice && (
                           <>
                             <span className="text-base font-normal text-white leading-tight mb-0.5">
-                              ₹{Math.round(Number(product.productInfo.originalPrice) * (1 - Number(product.productInfo.discountPercentage) / 100))}
+                              ${Math.round(Number(product.productInfo.originalPrice) * (1 - Number(product.productInfo.discountPercentage) / 100))}
                             </span>
-                            <span className="text-white text-xs font-normal line-through leading-[14.40px]">₹{product.productInfo.originalPrice}</span>
-                            <span className="text-white text-xs font-normal leading-[14.40px]">({product.productInfo.discountPercentage}% off)</span>
+                            <span className="text-white text-xs font-normal line-through leading-[14.40px]">${Math.round(Number(product.productInfo.originalPrice))}</span>
+                            <span className="text-white text-xs font-normal leading-[14.40px]">({Math.round(Number(product.productInfo.discountPercentage))}% off)</span>
                           </>
                         )}
                         {!product?.productInfo?.discountPercentage && product?.productInfo?.originalPrice && (
                           <span className="text-base font-normal text-white leading-tight mb-0.5">
-                            ₹{product.productInfo.originalPrice}
+                            ${Math.round(Number(product.productInfo.originalPrice))}
                           </span>
                         )}
                       </div>
