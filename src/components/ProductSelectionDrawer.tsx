@@ -26,7 +26,9 @@ export default function ProductSelectionDrawer({
   const [dragStartY, setDragStartY] = useState(0)
   const [currentTransform, setCurrentTransform] = useState(0)
   
-  // Drag handlers
+  // Animation state for smooth unmounting
+  const [shouldRender, setShouldRender] = useState(false)
+  const [isVisible, setIsVisible] = useState(false)
   const handleDragStart = useCallback((clientY: number) => {
     setIsDragging(true)
     setDragStartY(clientY)
@@ -114,18 +116,22 @@ export default function ProductSelectionDrawer({
     }
   }, [isDragging, handleDragMove, handleDragEnd])
   
-  // Reset transform when drawer closes
+  // Manage rendering and visibility for smooth animations
   useEffect(() => {
-    if (!isOpen && drawerRef.current) {
-      drawerRef.current.style.transform = 'translateY(0px)'
-      drawerRef.current.style.opacity = '1'
-      drawerRef.current.style.transition = ''
+    if (isOpen) {
+      setShouldRender(true)
+      // Small delay to ensure DOM is ready before animating in
+      setTimeout(() => setIsVisible(true), 10)
+    } else {
+      setIsVisible(false)
+      // Delay unmounting until animation completes
+      setTimeout(() => setShouldRender(false), 300)
     }
   }, [isOpen])
 
   // Scroll current product into view when drawer opens
   useEffect(() => {
-    if (!isOpen || !placement || !scrollContainerRef.current) return
+    if (!isVisible || !placement || !scrollContainerRef.current) return
 
     const currentProduct = placement.products.find(product => product.visible)
     if (!currentProduct) return
@@ -140,12 +146,41 @@ export default function ProductSelectionDrawer({
       const elementLeft = currentProductElement.offsetLeft
       const scrollLeft = elementLeft - (containerWidth / 2) + (elementWidth / 2)
       
+      // Temporarily disable smooth scrolling to force instant scroll
+      const originalScrollBehavior = scrollContainer.style.scrollBehavior
+      scrollContainer.style.scrollBehavior = 'auto'
+      
       scrollContainer.scrollTo({
-        left: Math.max(0, scrollLeft),
-        behavior: 'smooth'
+        left: Math.max(0, scrollLeft)
       })
+      
+      // After scrolling, ensure CTA buttons are properly shown/hidden
+      setTimeout(() => {
+        scrollContainer.style.scrollBehavior = originalScrollBehavior
+        
+        // Hide all CTA buttons first
+        const allCtaButtons = scrollContainer.querySelectorAll('.cta-buttons')
+        allCtaButtons.forEach(button => {
+          (button as HTMLElement).style.opacity = '0'
+          ;(button as HTMLElement).style.pointerEvents = 'none'
+        })
+        
+        // Show CTA buttons for the current product
+        const currentCtaButtons = currentProductElement.querySelector('.cta-buttons') as HTMLElement
+        if (currentCtaButtons) {
+          currentCtaButtons.style.opacity = '1'
+          currentCtaButtons.style.pointerEvents = 'auto'
+        }
+        
+        // Also update the width for active element
+        const allImageContainers = scrollContainer.querySelectorAll('.image-container')
+        allImageContainers.forEach(container => {
+          (container as HTMLElement).style.width = '60%'
+        })
+        currentProductElement.style.width = '70%'
+      }, 0)
     }
-  }, [isOpen, placement])
+  }, [isVisible, placement])
 
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current
@@ -154,6 +189,7 @@ export default function ProductSelectionDrawer({
     const imageContainers = scrollContainer.querySelectorAll('.image-container')
     
     let activeElement: Element | null = null
+    let scrollTimeout: NodeJS.Timeout | null = null
 
     const updateActiveElement = () => {
       const containerRect = scrollContainer.getBoundingClientRect()
@@ -188,7 +224,7 @@ export default function ProductSelectionDrawer({
         // Set new active element
         activeElement = closestElement
         if (activeElement) {
-          (activeElement as HTMLElement).style.width = '80%'
+          (activeElement as HTMLElement).style.width = '70%'
           const ctaButtons = (activeElement as HTMLElement).querySelector('.cta-buttons') as HTMLElement
           if (ctaButtons) {
             ctaButtons.style.opacity = '1'
@@ -198,29 +234,86 @@ export default function ProductSelectionDrawer({
       }
     }
 
+    const snapToCenter = () => {
+      if (!scrollContainer) return
+
+      const containerRect = scrollContainer.getBoundingClientRect()
+      const containerCenter = containerRect.left + containerRect.width / 2
+      
+      let closestElement: Element | null = null
+      let minDistance = Infinity
+      let targetScrollLeft = scrollContainer.scrollLeft
+      
+      imageContainers.forEach((element) => {
+        const elementRect = element.getBoundingClientRect()
+        const elementCenter = elementRect.left + elementRect.width / 2
+        const distance = Math.abs(elementCenter - containerCenter)
+        
+        if (distance < minDistance) {
+          minDistance = distance
+          closestElement = element
+          // Calculate the scroll position needed to center this element
+          const elementLeft = (element as HTMLElement).offsetLeft
+          const elementWidth = (element as HTMLElement).offsetWidth
+          const containerWidth = scrollContainer.clientWidth
+          targetScrollLeft = elementLeft - (containerWidth / 2) + (elementWidth / 2)
+        }
+      })
+      
+      // Smoothly scroll to the calculated position
+      if (closestElement && Math.abs(scrollContainer.scrollLeft - targetScrollLeft) > 1) {
+        scrollContainer.scrollTo({
+          left: Math.max(0, targetScrollLeft),
+          behavior: 'smooth'
+        })
+      }
+    }
+
+    const handleScroll = () => {
+      updateActiveElement()
+      
+      // Clear existing timeout
+      if (scrollTimeout) {
+        clearTimeout(scrollTimeout)
+      }
+      
+      // Set a new timeout to snap to center after scrolling stops
+      scrollTimeout = setTimeout(() => {
+        snapToCenter()
+      }, 50) // Wait 150ms after scroll stops
+    }
+
     // Initial check
     updateActiveElement()
     
     // Listen to scroll events
-    scrollContainer.addEventListener('scroll', updateActiveElement, { passive: true })
+    scrollContainer.addEventListener('scroll', handleScroll, { passive: true })
     
     // Also listen to resize events in case container size changes
     const resizeObserver = new ResizeObserver(updateActiveElement)
     resizeObserver.observe(scrollContainer)
 
     return () => {
-      scrollContainer.removeEventListener('scroll', updateActiveElement)
+      scrollContainer.removeEventListener('scroll', handleScroll)
+      if (scrollTimeout) {
+        clearTimeout(scrollTimeout)
+      }
       resizeObserver.disconnect()
     }
-  }, [placement?.products])
+  }, [placement?.products, isVisible])
 
-  if (!isOpen || !placement) return null
+  if (!shouldRender || !placement) return null
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-30 flex items-end font-belleza">
+    <div className={`fixed inset-0 bg-black/50 z-30 flex items-end font-belleza transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
       <div 
         ref={drawerRef}
         className="bg-black w-full rounded-t-3xl shadow-lg max-h-[85vh] flex flex-col"
+        style={{ 
+          transform: isVisible ? 'translateY(0px)' : 'translateY(100%)', 
+          transition: 'transform 0.3s ease-out',
+          touchAction: 'none' // Disable pull-to-refresh when drawer is active
+        }}
       >
         {/* Drag Handle */}
         <div 
@@ -247,12 +340,12 @@ export default function ProductSelectionDrawer({
 
         {/* Snap Scrolling Image Gallery */}
         <div className="flex-1 overflow-hidden pb-10">
-          <div ref={scrollContainerRef} className="h-full overflow-x-auto overflow-y-hidden snap-x snap-proximity snap-smooth">
+          <div ref={scrollContainerRef} className="h-full min-h-[304px] overflow-x-auto overflow-y-hidden snap-x snap-mandatory snap-smooth hide-scrollbars">
             <div className="flex h-full">
               {/* Left padding slide */}
               <div className="flex-shrink-0 flex flex-col items-center justify-center px-1.5 opacity-0" style={{ width: '60%' }}>
                 <div className="w-full max-w-sm invisible">
-                  <div className="aspect-[16/11] relative bg-transparent rounded-2xl overflow-hidden mb-6"></div>
+                  <div className="aspect-[16/11] relative bg-transparent rounded-2xl overflow-hidden mb-3"></div>
                   <div className="text-left mb-3 invisible">
                     <div className="h-6 bg-transparent mb-1"></div>
                     <div className="h-6 bg-transparent w-24"></div>
@@ -269,10 +362,10 @@ export default function ProductSelectionDrawer({
                 <div key={product.id} data-product-id={product.id} className="image-container flex-shrink-0 snap-center flex flex-col items-center justify-center px-1.5 transition-all duration-300 ease-out" style={{ width: '60%' }}>
                   <div className="w-full max-w-sm">
                     {/* Product Image - Landscape aspect ratio */}
-                    <div className="aspect-[16/11] relative bg-gray-200 rounded-2xl overflow-hidden mb-6">
+                    <div className="aspect-[16/11] relative bg-gray-200 rounded-2xl overflow-hidden mb-3">
                       {product.src ? (
                         <Image
-                          src={product.productImage || product.src} // Fallback to src if productImage is not available
+                          src={product?.productInfo?.productImage || product.src} // Fallback to src if productImage is not available
                           alt={product.name}
                           fill
                           className="object-contain"
@@ -298,28 +391,47 @@ export default function ProductSelectionDrawer({
                     
                     {/* Product Details */}
                     <div className="text-left mb-3">
-                      <h4 className="text-white text-base font-normal">
-                        {product.name}
+                      <h4 className="text-white text-base font-normal leading-tight mb-1">
+                        {product?.productInfo?.productName || product.name}
                       </h4>
                       
                       {/* Price */}
-                      <div className="text-base font-normal text-white">
-                        ₹1,299
+                      <div className="inline-flex gap-2 items-center">
+                        {product?.productInfo?.discountPercentage && product?.productInfo?.originalPrice && (
+                          <>
+                            <span className="text-base font-normal text-white leading-tight mb-0.5">
+                              ₹{Math.round(Number(product.productInfo.originalPrice) * (1 - Number(product.productInfo.discountPercentage) / 100))}
+                            </span>
+                            <span className="text-white text-xs font-normal line-through leading-[14.40px]">₹{product.productInfo.originalPrice}</span>
+                            <span className="text-white text-xs font-normal leading-[14.40px]">({product.productInfo.discountPercentage}% off)</span>
+                          </>
+                        )}
+                        {!product?.productInfo?.discountPercentage && product?.productInfo?.originalPrice && (
+                          <span className="text-base font-normal text-white leading-tight mb-0.5">
+                            ₹{product.productInfo.originalPrice}
+                          </span>
+                        )}
                       </div>
                     </div>
                     
                     {/* Action Buttons - Three in a row */}
                     <div className="cta-buttons flex gap-2 sm:gap-3 transition-opacity duration-300">
+                      <div className="flex-1 min-w-0 h-8 px-2 sm:px-2.5 py-1 bg-white rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden cursor-pointer hover:bg-gray-100 transition-colors active:scale-95">
+                        <div className="text-[#333333] text-xs font-normal leading-none truncate">
+                          Buy Now
+                        </div>
+                      </div>
+
                       <div
                         onClick={() => !product.visible && onProductSwitch(product)}
-                        className={`flex-1 min-w-0 h-8 px-2 sm:px-2.5 py-1 rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden cursor-pointer transition-all ${
+                        className={`flex-1 min-w-0 h-8 px-2 sm:px-2.5 py-1 rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden transition-all ${
                           product.visible
-                            ? 'bg-green-600 hover:bg-green-700'
-                            : 'bg-white hover:bg-gray-100 active:scale-95'
+                            ? 'bg-gray-500 cursor-not-allowed'
+                            : 'border border-white/30 active:scale-95 cursor-pointer'
                         }`}
                       >
                         <div className={`text-xs font-normal leading-none truncate ${
-                          product.visible ? 'text-white' : 'text-[#333333]'
+                          product.visible ? 'text-gray-300' : 'text-white'
                         }`}>
                           {product.visible ? 'Selected' : 'Try On'}
                         </div>
@@ -330,12 +442,6 @@ export default function ProductSelectionDrawer({
                           Details
                         </div>
                       </div>
-                      
-                      <div className="flex-1 min-w-0 h-8 px-2 sm:px-2.5 py-1 bg-white rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden cursor-pointer hover:bg-gray-100 transition-colors active:scale-95">
-                        <div className="text-[#333333] text-xs font-normal leading-none truncate">
-                          Buy Now
-                        </div>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -344,7 +450,7 @@ export default function ProductSelectionDrawer({
               {/* Right padding slide */}
               <div className="flex-shrink-0 flex flex-col items-center justify-center px-1.5 opacity-0" style={{ width: '60%' }}>
                 <div className="w-full max-w-sm invisible">
-                  <div className="aspect-[16/11] relative bg-transparent rounded-2xl overflow-hidden mb-6"></div>
+                  <div className="aspect-[16/11] relative bg-transparent rounded-2xl overflow-hidden mb-3"></div>
                   <div className="text-left mb-3 invisible">
                     <div className="h-6 bg-transparent mb-1"></div>
                     <div className="h-6 bg-transparent w-24"></div>
@@ -356,37 +462,6 @@ export default function ProductSelectionDrawer({
                   </div>
                 </div>
               </div>
-              
-              {/* Static placeholder assets - only visible when scrolled to */}
-              {/* {[1, 2, 3].map((index) => (
-                <div key={`placeholder-${index}`} className="image-container flex-shrink-0 snap-center flex flex-col items-center justify-center px-1.5 transition-all duration-300 ease-out" style={{ width: '60%' }}>
-                  <div className="w-full max-w-sm">
-
-                    <div className="aspect-[16/11] relative bg-gray-200 rounded-2xl overflow-hidden mb-6 flex items-center justify-center">
-                      <svg className="w-16 h-16 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    
-                    <div className="text-left mb-3">
-                      <div className="h-6 bg-gray-700 rounded animate-pulse mb-1"></div>
-                      <div className="h-6 bg-gray-700 rounded w-24 animate-pulse"></div>
-                    </div>
-                    
-                    <div className="flex gap-2 sm:gap-3">
-                      <div className="flex-1 min-w-0 h-8 px-2 sm:px-2.5 py-1 bg-gray-700 rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden animate-pulse">
-                        <div className="w-12 h-3 bg-gray-600 rounded animate-pulse"></div>
-                      </div>
-                      <div className="flex-1 min-w-0 h-8 px-2 sm:px-2.5 py-1 bg-gray-700 rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden animate-pulse">
-                        <div className="w-12 h-3 bg-gray-600 rounded animate-pulse"></div>
-                      </div>
-                      <div className="flex-1 min-w-0 h-8 px-2 sm:px-2.5 py-1 bg-gray-700 rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden animate-pulse">
-                        <div className="w-12 h-3 bg-gray-600 rounded animate-pulse"></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))} */}
             </div>
           </div>
         </div>

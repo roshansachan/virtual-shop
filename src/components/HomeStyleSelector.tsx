@@ -35,7 +35,7 @@ const HomeStyleSelector: React.FC<HomeStyleSelectorProps> = ({ styles, selectedS
   return (
     <>
       {/* Left Panel Toggle */}
-      <div className={`absolute inline-flex bg-black/60 rounded-b-lg p-2 pointer-events-auto origin-top-left -rotate-90 transition-all duration-300 ease-in-out font-belleza ${showLeftPanel ? 'left-52 top-96' : 'left-0 top-96'}`}>
+      <div className={`absolute inline-flex bg-black/50 rounded-b-lg p-2 pointer-events-auto origin-top-left -rotate-90 transition-all duration-300 ease-in-out font-belleza ${showLeftPanel ? 'left-52 top-96' : 'left-0 top-96'}`}>
         <button
           onClick={onTogglePanel}
           className="text-white text-xs uppercase writing-mode-vertical-rl transform px-2"
@@ -46,7 +46,7 @@ const HomeStyleSelector: React.FC<HomeStyleSelectorProps> = ({ styles, selectedS
       </div>
 
       {/* Left Panel */}
-      <div className={`absolute left-0 top-0 bottom-0 w-52 bg-black/48 overflow-y-auto pointer-events-auto transition-all duration-300 ease-in-out font-belleza ${
+      <div className={`absolute left-0 top-0 bottom-0 w-52 bg-black/50 overflow-y-auto pointer-events-auto transition-all duration-300 ease-in-out font-belleza ${
         showLeftPanel 
           ? 'translate-x-0 opacity-100' 
           : '-translate-x-full opacity-0'
