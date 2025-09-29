@@ -95,6 +95,7 @@ const PlacementImageComponent: React.FC<PlacementImageComponentProps> = ({ place
 
   // Only allow dragging if this placement image belongs to the currently selected placement
   const isDraggable = Boolean(selectedPlacementId && placementImage.placementId === selectedPlacementId);
+  const isSelected = Boolean(selectedPlacementId && placementImage.placementId === selectedPlacementId);
 
   return (
     <KonvaImage
@@ -104,9 +105,10 @@ const PlacementImageComponent: React.FC<PlacementImageComponentProps> = ({ place
       width={placementImage.width}
       height={placementImage.height}
       draggable={isDraggable}
-      onDragEnd={handleDragEnd}
-      // opacity={isDraggable ? 1 : 0.7} // Make non-draggable images slightly transparent
+      onDragEnd={handleDragEnd}      
       listening={isDraggable} // Only listen to events for draggable images
+      // stroke={isSelected ? 'rgba(0,0,0,0.2)' : undefined} // Blue border for selected placement images
+      strokeWidth={isSelected ? 2 : 0}              
     />
   );
 };
@@ -1350,6 +1352,79 @@ function DesignStudioContent() {
     return activePlacementImages;
   }, [currentSceneId, scenes, selectedSpaceId]);
 
+  // Handle keyboard navigation for placement images
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    // Only handle keyboard navigation if a placement is selected and we're not in an input field
+    if (!selectedPlacementId || 
+        event.target instanceof HTMLInputElement || 
+        event.target instanceof HTMLTextAreaElement ||
+        event.target instanceof HTMLSelectElement) {
+      return;
+    }
+
+    const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+    if (!arrowKeys.includes(event.key)) {
+      return;
+    }
+
+    event.preventDefault(); // Prevent page scrolling
+
+    // Determine movement distance based on modifier keys
+    let moveDistance = 1; // Default 1px for precise control
+    if (event.shiftKey) {
+      moveDistance = 10; // 10px for faster movement
+    }
+    if (event.ctrlKey || event.metaKey) {
+      moveDistance = 50; // 50px for rapid positioning
+    }
+
+    // Calculate movement deltas
+    let deltaX = 0;
+    let deltaY = 0;
+    
+    switch (event.key) {
+      case 'ArrowUp':
+        deltaY = -moveDistance;
+        break;
+      case 'ArrowDown':
+        deltaY = moveDistance;
+        break;
+      case 'ArrowLeft':
+        deltaX = -moveDistance;
+        break;
+      case 'ArrowRight':
+        deltaX = moveDistance;
+        break;
+    }
+
+    // Get all placement images from the currently selected placement
+    const currentPlacementImages = getCurrentPlacedPlacementImages().filter(
+      (img) => img.placementId === selectedPlacementId
+    );
+
+    // Move each placement image in the selected placement
+    currentPlacementImages.forEach((placementImage) => {
+      const newX = Math.max(0, placementImage.x + deltaX);
+      const newY = Math.max(0, placementImage.y + deltaY);
+      
+      // Update the position using the existing drag end handler
+      handlePlacementImageDragEnd(placementImage, newX, newY);
+    });
+  }, [selectedPlacementId, getCurrentPlacedPlacementImages, handlePlacementImageDragEnd]);
+
+  // Add keyboard event listeners
+  useEffect(() => {
+    const handleKeyDownEvent = (event: KeyboardEvent) => {
+      handleKeyDown(event);
+    };
+
+    window.addEventListener('keydown', handleKeyDownEvent);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDownEvent);
+    };
+  }, [handleKeyDown]);
+
   // Stable callback for refresh function
   // Stable callback for scenes loaded
   const handleScenesLoaded = useCallback((loadedScenes: Scene[]) => {
@@ -1760,7 +1835,14 @@ function DesignStudioContent() {
             </div>
           ) : (
             /* Container for the canvas */
-            <div className="absolute inset-0">
+            <div 
+              className="absolute inset-0 outline-none" 
+              tabIndex={0}
+              onFocus={() => console.log('Canvas focused')}
+              style={{
+                border: selectedPlacementId ? '2px solid rgba(59, 130, 246, 0.5)' : 'none'
+              }}
+            >
               <Stage 
                 ref={stageRef}
                 width={stageSize.width} 
@@ -1806,12 +1888,22 @@ function DesignStudioContent() {
 
           {/* Pan instructions overlay - only show when there are scenes */}
           {scenes.length > 0 && (
-            <div className="absolute top-4 right-4 bg-black/70 text-white px-3 py-2 rounded-lg text-sm">
-              <div className="flex items-center space-x-2">
-                <span>🖱️</span>
-                <span>
-                  Drag background to pan • {selectedPlacementId ? 'Selected placement images can be moved' : 'Select a placement to move items'}
-                </span>
+            <div className="absolute top-4 right-4 bg-black/70 text-white px-3 py-2 rounded-lg text-sm max-w-sm">
+              <div className="flex flex-col space-y-1">
+                <div className="flex items-center space-x-2">
+                  <span>🖱️</span>
+                  <span>
+                    Drag background to pan • {selectedPlacementId ? 'Selected placement images can be moved' : 'Select a placement to move items'}
+                  </span>
+                </div>
+                {selectedPlacementId && (
+                  <div className="flex items-center space-x-2 text-xs opacity-90">
+                    <span>⌨️</span>
+                    <span>
+                      Arrow keys: 1px • Shift+Arrow: 10px • Ctrl/Cmd+Arrow: 50px
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           )}
