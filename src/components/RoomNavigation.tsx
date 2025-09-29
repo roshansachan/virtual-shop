@@ -3,9 +3,9 @@
 import React, { useRef, useCallback } from 'react';
 
 interface RoomNavigationProps {
-  rooms: string[];
-  selectedRoom: string;
-  onRoomSelect: (room: string) => void;
+  rooms: { id: string; name: string }[];
+  selectedRoomId: string;
+  onRoomSelect: (roomId: string) => void;
 }
 
 // SVG Icon Components
@@ -21,19 +21,20 @@ const ChevronRight = ({ size = 16, className }: { size?: number; className?: str
   </svg>
 );
 
-const RoomNavigation: React.FC<RoomNavigationProps> = ({ rooms, selectedRoom, onRoomSelect }) => {
+const RoomNavigation: React.FC<RoomNavigationProps> = ({ rooms, selectedRoomId, onRoomSelect }) => {
+  console.log('RoomNavigation render', { rooms, selectedRoomId });
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const currentIndex = rooms.indexOf(selectedRoom);
+  const currentIndex = rooms.findIndex(room => room.id === selectedRoomId);
 
   const navigateToPrevious = useCallback(() => {
     const previousIndex = currentIndex === 0 ? rooms.length - 1 : currentIndex - 1;
-    onRoomSelect(rooms[previousIndex]);
+    onRoomSelect(rooms[previousIndex].id);
   }, [currentIndex, rooms, onRoomSelect]);
 
   const navigateToNext = useCallback(() => {
     const nextIndex = currentIndex === rooms.length - 1 ? 0 : currentIndex + 1;
-    onRoomSelect(rooms[nextIndex]);
+    onRoomSelect(rooms[nextIndex].id);
   }, [currentIndex, rooms, onRoomSelect]);
 
   // Calculate extended rooms array for seamless circular scrolling
@@ -81,10 +82,10 @@ const RoomNavigation: React.FC<RoomNavigationProps> = ({ rooms, selectedRoom, on
     }, 150); // Wait 150ms after scroll stops
   }, [centerActiveRoom]);
 
-  // Smooth scroll to center the active room when selectedRoom changes
+  // Smooth scroll to center the active room when selectedRoomId changes
   React.useEffect(() => {
     centerActiveRoom();
-  }, [selectedRoom, centerActiveRoom]);
+  }, [selectedRoomId, centerActiveRoom]);
 
   return (
     <div className="absolute top-30 left-9 right-9 bg-black/60 rounded-2xl px-4 py-2 pointer-events-auto">
@@ -105,16 +106,16 @@ const RoomNavigation: React.FC<RoomNavigationProps> = ({ rooms, selectedRoom, on
           <div className="flex items-center gap-6 px-8">
             {extendedRooms.map(({ room, originalIndex }, index) => (
               <button
-                key={`${room}-${originalIndex}-${index}`}
+                key={`${room.id}-${originalIndex}-${index}`}
                 data-active={originalIndex === currentIndex}
-                onClick={() => onRoomSelect(room)}
+                onClick={() => onRoomSelect(room.id)}
                 className={`text-xs uppercase whitespace-nowrap transition-all duration-300 snap-center flex-shrink-0 ${
                   originalIndex === currentIndex
                     ? 'text-white font-semibold scale-110'
                     : 'text-white/70 scale-100'
                 }`}
               >
-                {room}
+                {room.name}
               </button>
             ))}
           </div>

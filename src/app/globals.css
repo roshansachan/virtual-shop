@@ -182,3 +182,20 @@ body {
   perspective: 1000;
   -webkit-perspective: 1000;
 }
+
+/* Prevent document scrolling and overscroll on mobile to avoid zoom */
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  height: 100%;
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  top: 0;
+  left: 0;
+  overscroll-behavior: none;
+  -webkit-overscroll-behavior: none;
+}

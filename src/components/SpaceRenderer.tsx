@@ -27,7 +27,7 @@ interface Placement {
 }
 
 interface SpaceRendererProps {
-  spaceId?: string
+  spaceId: string | null;
   hideIndicators?: boolean
 }
 
@@ -294,6 +294,23 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
     } else {
       window.addEventListener('resize', updateViewportHeight)
       return () => window.removeEventListener('resize', updateViewportHeight)
+    }
+  }, [])
+
+  // Prevent pinch-to-zoom gestures
+  useEffect(() => {
+    const preventZoom = (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        e.preventDefault()
+      }
+    }
+
+    document.addEventListener('touchstart', preventZoom, { passive: false })
+    document.addEventListener('touchmove', preventZoom, { passive: false })
+
+    return () => {
+      document.removeEventListener('touchstart', preventZoom)
+      document.removeEventListener('touchmove', preventZoom)
     }
   }, [])
 

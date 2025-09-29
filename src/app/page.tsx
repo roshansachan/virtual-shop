@@ -1,19 +1,18 @@
 'use client';
 
 import { Suspense, useEffect, useState, useCallback } from 'react'
-import { useSearchParams } from 'next/navigation'
+// import { useSearchParams } from 'next/navigation'
 // import Link from 'next/link'
 import SpaceRenderer from '@/components/SpaceRenderer'
 import StaticHUD from '@/components/StaticHUD'
 
 interface HomeContentProps {
-  selectedSpace: number | null;
-  onSelectedSpaceChange: (spaceId: number | null) => void;
+  selectedSpace: string | null;
 }
 
-function HomeContent({ selectedSpace, onSelectedSpaceChange }: HomeContentProps) {
-  const searchParams = useSearchParams();
-  const spaceIdParam = searchParams.get('spaceId');
+function HomeContent({ selectedSpace }: HomeContentProps) {
+  // const searchParams = useSearchParams();
+  // const spaceIdParam = searchParams.get('spaceId');
 
   // Handle dynamic viewport height for mobile browsers
   useEffect(() => {
@@ -35,21 +34,11 @@ function HomeContent({ selectedSpace, onSelectedSpaceChange }: HomeContentProps)
     }
   }, [])
 
-  // Initialize selectedSpace from query param on mount
-  useEffect(() => {
-    if (spaceIdParam && !selectedSpace) {
-      const spaceId = parseInt(spaceIdParam, 10);
-      if (!isNaN(spaceId)) {
-        onSelectedSpaceChange(spaceId);
-      }
-    }
-  }, [spaceIdParam, selectedSpace, onSelectedSpaceChange]);
-
   return (
     <div className="relative w-full" style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
       <SpaceRenderer 
         hideIndicators
-        spaceId={selectedSpace?.toString()}
+        spaceId={selectedSpace}
       />
       
       {/* Design Studio link */}
@@ -66,9 +55,9 @@ function HomeContent({ selectedSpace, onSelectedSpaceChange }: HomeContentProps)
 }
 
 export default function Home() {
-  const [selectedSpace, setSelectedSpace] = useState<number | null>(null);
+  const [selectedSpace, setSelectedSpace] = useState<string | null>(null);
   
-  const handleSelectedSpaceChange = useCallback((spaceId: number | null) => {
+  const handleSelectedSpaceChange = useCallback((spaceId: string | null) => {
     setSelectedSpace(spaceId);
   }, []);
 
@@ -83,7 +72,6 @@ export default function Home() {
     }>
       <HomeContent 
         selectedSpace={selectedSpace}
-        onSelectedSpaceChange={handleSelectedSpaceChange}
       />
       <StaticHUD 
         selectedSpace={selectedSpace}
