@@ -143,9 +143,9 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
 
     // If background is larger than viewport in both dimensions, keep original size (scale = 1)
     // This allows scrolling instead of scaling down
-    if (bgWidth > viewportWidth && bgHeight > viewportHeight) {
-      return 1
-    }
+    // if (bgWidth > viewportWidth && bgHeight > viewportHeight) {
+    //   return 1
+    // }
 
     // If background is smaller than viewport, scale up to cover the viewport
     // Use the larger scale factor to ensure the image covers the entire viewport
