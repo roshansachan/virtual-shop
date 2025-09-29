@@ -60,7 +60,7 @@ export default function ProductSelectionDrawer({
       const scrollContainer = scrollContainerRef.current
       if (!scrollContainer) return
 
-      const imageContainers = scrollContainer.querySelectorAll('.image-container')
+      const imageContainers = scrollContainer.querySelectorAll('.image-container') as NodeListOf<HTMLElement>
       
       const scrollTimeout = scrollTimeoutRef.current
 
@@ -68,7 +68,7 @@ export default function ProductSelectionDrawer({
         const containerRect = scrollContainer.getBoundingClientRect()
         const containerCenter = containerRect.left + containerRect.width / 2
         
-        let closestElement: Element | null = null
+        let closestElement: HTMLElement | null = null
         let minDistance = Infinity
         
         imageContainers.forEach((element) => {
@@ -88,7 +88,7 @@ export default function ProductSelectionDrawer({
         })
         
         if (closestElement) {
-          closestElement.classList.add('active')
+          (closestElement as HTMLElement).classList.add('active')
         }
       }
 
@@ -106,7 +106,7 @@ export default function ProductSelectionDrawer({
         const containerRect = scrollContainer.getBoundingClientRect()
         const containerCenter = containerRect.left + containerRect.width / 2
         
-        let closestElement: Element | null = null
+        let closestElement: HTMLElement | null = null
         let minDistance = Infinity
         let targetScrollLeft = scrollContainer.scrollLeft
         
@@ -262,7 +262,7 @@ export default function ProductSelectionDrawer({
         scrollContainer.style.scrollBehavior = originalScrollBehavior
         
         // Reset all elements to inactive state
-        const allImageContainers = scrollContainer.querySelectorAll('.image-container')
+        const allImageContainers = scrollContainer.querySelectorAll('.image-container') as NodeListOf<HTMLElement>
         allImageContainers.forEach(container => {
           container.classList.remove('active')
         })
@@ -277,16 +277,16 @@ export default function ProductSelectionDrawer({
     const scrollContainer = scrollContainerRef.current
     if (!scrollContainer) return
 
-    const imageContainers = scrollContainer.querySelectorAll('.image-container')
+    const imageContainers = scrollContainer.querySelectorAll('.image-container') as NodeListOf<HTMLElement>
     
-    let activeElement: Element | null = null
+    let activeElement: HTMLElement | null = null
 
     // Initial check
     const updateActiveElement = () => {
       const containerRect = scrollContainer.getBoundingClientRect()
       const containerCenter = containerRect.left + containerRect.width / 2
       
-      let closestElement: Element | null = null
+      let closestElement: HTMLElement | null = null
       let minDistance = Infinity
       
       imageContainers.forEach((element) => {
@@ -304,13 +304,13 @@ export default function ProductSelectionDrawer({
       if (activeElement !== closestElement) {
         // Reset previous active element
         if (activeElement) {
-          activeElement.classList.remove('active')
+          (activeElement as HTMLElement).classList.remove('active')
         }
         
         // Set new active element
         activeElement = closestElement
         if (activeElement) {
-          activeElement.classList.add('active')
+          (activeElement as HTMLElement).classList.add('active')
         }
       }
     }
