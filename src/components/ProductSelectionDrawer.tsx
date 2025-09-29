@@ -189,6 +189,7 @@ export default function ProductSelectionDrawer({
     const imageContainers = scrollContainer.querySelectorAll('.image-container')
     
     let activeElement: Element | null = null
+    let scrollTimeout: NodeJS.Timeout | null = null
 
     const updateActiveElement = () => {
       const containerRect = scrollContainer.getBoundingClientRect()
@@ -233,18 +234,70 @@ export default function ProductSelectionDrawer({
       }
     }
 
+    const snapToCenter = () => {
+      if (!scrollContainer) return
+
+      const containerRect = scrollContainer.getBoundingClientRect()
+      const containerCenter = containerRect.left + containerRect.width / 2
+      
+      let closestElement: Element | null = null
+      let minDistance = Infinity
+      let targetScrollLeft = scrollContainer.scrollLeft
+      
+      imageContainers.forEach((element) => {
+        const elementRect = element.getBoundingClientRect()
+        const elementCenter = elementRect.left + elementRect.width / 2
+        const distance = Math.abs(elementCenter - containerCenter)
+        
+        if (distance < minDistance) {
+          minDistance = distance
+          closestElement = element
+          // Calculate the scroll position needed to center this element
+          const elementLeft = (element as HTMLElement).offsetLeft
+          const elementWidth = (element as HTMLElement).offsetWidth
+          const containerWidth = scrollContainer.clientWidth
+          targetScrollLeft = elementLeft - (containerWidth / 2) + (elementWidth / 2)
+        }
+      })
+      
+      // Smoothly scroll to the calculated position
+      if (closestElement && Math.abs(scrollContainer.scrollLeft - targetScrollLeft) > 1) {
+        scrollContainer.scrollTo({
+          left: Math.max(0, targetScrollLeft),
+          behavior: 'smooth'
+        })
+      }
+    }
+
+    const handleScroll = () => {
+      updateActiveElement()
+      
+      // Clear existing timeout
+      if (scrollTimeout) {
+        clearTimeout(scrollTimeout)
+      }
+      
+      // Set a new timeout to snap to center after scrolling stops
+      scrollTimeout = setTimeout(() => {
+        snapToCenter()
+      }, 50) // Wait 150ms after scroll stops
+    }
+
     // Initial check
     updateActiveElement()
     
     // Listen to scroll events
-    scrollContainer.addEventListener('scroll', updateActiveElement, { passive: true })
+    scrollContainer.addEventListener('scroll', handleScroll, { passive: true })
     
     // Also listen to resize events in case container size changes
     const resizeObserver = new ResizeObserver(updateActiveElement)
     resizeObserver.observe(scrollContainer)
 
     return () => {
-      scrollContainer.removeEventListener('scroll', updateActiveElement)
+      scrollContainer.removeEventListener('scroll', handleScroll)
+      if (scrollTimeout) {
+        clearTimeout(scrollTimeout)
+      }
       resizeObserver.disconnect()
     }
   }, [placement?.products, isVisible])
@@ -287,7 +340,7 @@ export default function ProductSelectionDrawer({
 
         {/* Snap Scrolling Image Gallery */}
         <div className="flex-1 overflow-hidden pb-10">
-          <div ref={scrollContainerRef} className="h-full min-h-[296px] overflow-x-auto overflow-y-hidden snap-x snap-mandatory snap-smooth hide-scrollbars">
+          <div ref={scrollContainerRef} className="h-full min-h-[304px] overflow-x-auto overflow-y-hidden snap-x snap-mandatory snap-smooth hide-scrollbars">
             <div className="flex h-full">
               {/* Left padding slide */}
               <div className="flex-shrink-0 flex flex-col items-center justify-center px-1.5 opacity-0" style={{ width: '60%' }}>
@@ -409,37 +462,6 @@ export default function ProductSelectionDrawer({
                   </div>
                 </div>
               </div>
-              
-              {/* Static placeholder assets - only visible when scrolled to */}
-              {/* {[1, 2, 3].map((index) => (
-                <div key={`placeholder-${index}`} className="image-container flex-shrink-0 snap-center flex flex-col items-center justify-center px-1.5 transition-all duration-300 ease-out" style={{ width: '60%' }}>
-                  <div className="w-full max-w-sm">
-
-                    <div className="aspect-[16/11] relative bg-gray-200 rounded-2xl overflow-hidden mb-6 flex items-center justify-center">
-                      <svg className="w-16 h-16 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    
-                    <div className="text-left mb-3">
-                      <div className="h-6 bg-gray-700 rounded animate-pulse mb-1"></div>
-                      <div className="h-6 bg-gray-700 rounded w-24 animate-pulse"></div>
-                    </div>
-                    
-                    <div className="flex gap-2 sm:gap-3">
-                      <div className="flex-1 min-w-0 h-8 px-2 sm:px-2.5 py-1 bg-gray-700 rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden animate-pulse">
-                        <div className="w-12 h-3 bg-gray-600 rounded animate-pulse"></div>
-                      </div>
-                      <div className="flex-1 min-w-0 h-8 px-2 sm:px-2.5 py-1 bg-gray-700 rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden animate-pulse">
-                        <div className="w-12 h-3 bg-gray-600 rounded animate-pulse"></div>
-                      </div>
-                      <div className="flex-1 min-w-0 h-8 px-2 sm:px-2.5 py-1 bg-gray-700 rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden animate-pulse">
-                        <div className="w-12 h-3 bg-gray-600 rounded animate-pulse"></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))} */}
             </div>
           </div>
         </div>
