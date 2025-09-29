@@ -145,3 +145,84 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export async function PUT(request: NextRequest) {
+  try {
+    // Test database connection
+    const isConnected = await testConnection();
+    if (!isConnected) {
+      return NextResponse.json(
+        { success: false, error: 'Database connection failed' },
+        { status: 500 }
+      );
+    }
+
+    // Parse request body
+    const body = await request.json();
+    const { id, name, image } = body;
+
+    // Validate required fields
+    if (!id || typeof id !== 'number') {
+      return NextResponse.json(
+        { success: false, error: 'id is required and must be a number' },
+        { status: 400 }
+      );
+    }
+
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Name is required and must be a non-empty string' },
+        { status: 400 }
+      );
+    }
+
+    // Validate image if provided (should be S3 key or URL)
+    if (image !== null && image !== undefined && typeof image !== 'string') {
+      return NextResponse.json(
+        { success: false, error: 'image must be a valid string or null' },
+        { status: 400 }
+      );
+    }
+
+    // Update space
+    const result = await query(`
+      UPDATE spaces 
+      SET name = $1, image = $2, updated_at = NOW()
+      WHERE id = $3
+      RETURNING id, scene_id, name, image, created_at, updated_at
+    `, [
+      name.trim(),
+      image || null,
+      id
+    ]);
+
+    if (result.rows.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Space not found' },
+        { status: 404 }
+      );
+    }
+
+    const updatedSpace: DBSpace = {
+      id: result.rows[0].id,
+      scene_id: result.rows[0].scene_id,
+      name: result.rows[0].name,
+      image: result.rows[0].image && !isS3Url(result.rows[0].image) ? s3KeyToUrl(result.rows[0].image) : result.rows[0].image, // Only convert if it's a key, not already a URL
+      created_at: result.rows[0].created_at,
+      updated_at: result.rows[0].updated_at
+    };
+
+    return NextResponse.json({
+      success: true,
+      data: updatedSpace,
+      message: 'Space updated successfully'
+    });
+
+  } catch (error) {
+    console.error('Error updating space:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to update space' },
+      { status: 500 }
+    );
+  }
+}

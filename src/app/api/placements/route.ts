@@ -132,3 +132,74 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export async function PUT(request: NextRequest) {
+  try {
+    // Test database connection
+    const isConnected = await testConnection();
+    if (!isConnected) {
+      return NextResponse.json(
+        { success: false, error: 'Database connection failed' },
+        { status: 500 }
+      );
+    }
+
+    // Parse request body
+    const body = await request.json();
+    const { id, name } = body;
+
+    // Validate required fields
+    if (!id || typeof id !== 'number') {
+      return NextResponse.json(
+        { success: false, error: 'id is required and must be a number' },
+        { status: 400 }
+      );
+    }
+
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Name is required and must be a non-empty string' },
+        { status: 400 }
+      );
+    }
+
+    // Update placement name
+    const result = await query(`
+      UPDATE placements 
+      SET name = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING id, space_id, name, created_at, updated_at
+    `, [
+      name.trim(),
+      id
+    ]);
+
+    if (result.rows.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Placement not found' },
+        { status: 404 }
+      );
+    }
+
+    const updatedPlacement: DBPlacement = {
+      id: result.rows[0].id,
+      space_id: result.rows[0].space_id,
+      name: result.rows[0].name,
+      created_at: result.rows[0].created_at,
+      updated_at: result.rows[0].updated_at
+    };
+
+    return NextResponse.json({
+      success: true,
+      data: updatedPlacement,
+      message: 'Placement updated successfully'
+    });
+
+  } catch (error) {
+    console.error('Error updating placement:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to update placement' },
+      { status: 500 }
+    );
+  }
+}

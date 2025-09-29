@@ -250,6 +250,22 @@ function DesignStudioContent() {
     image: string;
     product_id?: number | null;
   } | null>(null);
+  
+  // Edit placement name state
+  const [editingPlacementName, setEditingPlacementName] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  
+  // Edit space state
+  const [editingSpace, setEditingSpace] = useState<{
+    id: string;
+    dbId: string;
+    name: string;
+    image?: string;
+    imageS3Key?: string;
+  } | null>(null);
+  
   const [productImageForm, setProductImageForm] = useState({ name: '', image: '' });
   
   // Product upload state
@@ -771,6 +787,102 @@ function DesignStudioContent() {
       fetchPlacementImages(selectedPlacement.dbId);
     }
   }, [getSelectedPlacement, fetchPlacementImages]);
+
+  // Update placement name
+  const updatePlacementName = useCallback(async (placementDbId: string, newName: string) => {
+    try {
+      const response = await fetch('/api/placements', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: parseInt(placementDbId),
+          name: newName
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Update the placement name in the local state
+        setScenes(prevScenes => prevScenes.map(scene => ({
+          ...scene,
+          spaces: scene.spaces.map(space => ({
+            ...space,
+            placements: space.placements.map(placement => 
+              placement.dbId === placementDbId 
+                ? { ...placement, name: newName }
+                : placement
+            )
+          }))
+        })));
+        
+        // Close editing mode
+        setEditingPlacementName(null);
+      } else {
+        alert(`Failed to update placement name: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Error updating placement name:', error);
+      alert('Failed to update placement name. Please try again.');
+    }
+  }, []);
+
+  // Handle edit placement name
+  const handleEditPlacementName = useCallback((placement: any) => {
+    setEditingPlacementName({
+      id: placement.dbId,
+      name: placement.name
+    });
+  }, []);
+
+  // Handle save placement name
+  const handleSavePlacementName = useCallback(() => {
+    if (editingPlacementName && editingPlacementName.name.trim()) {
+      updatePlacementName(editingPlacementName.id, editingPlacementName.name.trim());
+    }
+  }, [editingPlacementName, updatePlacementName]);
+
+  // Handle cancel edit placement name
+  const handleCancelEditPlacementName = useCallback(() => {
+    setEditingPlacementName(null);
+  }, []);
+
+  // Handle edit space
+  const handleEditSpace = useCallback((space: any) => {
+    setEditingSpace({
+      id: space.id,
+      dbId: space.dbId,
+      name: space.name,
+      image: space.image,
+      imageS3Key: space.imageS3Key
+    });
+    setShowCreateSpace(true); // Reuse the same modal
+  }, []);
+
+  // Handle space updated (for edit mode)
+  const handleSpaceUpdated = useCallback((updatedSpace: Space) => {
+    // Update the space in local state
+    setScenes(prevScenes => prevScenes.map(scene => ({
+      ...scene,
+      spaces: scene.spaces.map(space => 
+        space.dbId === updatedSpace.dbId 
+          ? { ...space, ...updatedSpace }
+          : space
+      )
+    })));
+    
+    // Close edit mode
+    setEditingSpace(null);
+    setShowCreateSpace(false);
+  }, []);
+
+  // Handle modal close (reset edit state)
+  const handleCreateSpaceModalClose = useCallback(() => {
+    setEditingSpace(null);
+    setShowCreateSpace(false);
+  }, []);
 
   // Calculate placement position for new products
   const calculateNewProductPosition = (placement: Placement, backgroundImageSize: { width: number; height: number }) => {
@@ -1603,14 +1715,26 @@ function DesignStudioContent() {
                       <div key={space.id} className={`border rounded-lg ${selectedSpaceId === space.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
                         {/* Space Header */}
                         <div 
-                          className={`flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 ${
+                          className={`flex items-center justify-between p-3 hover:bg-gray-50 ${
                             selectedSpaceId === space.id ? 'bg-blue-100' : ''
                           }`}
-                          onClick={() => setSelectedSpaceId(selectedSpaceId === space.id ? '' : space.id)}
                         >
-                          <div className="flex items-center gap-2">                            
+                          <div 
+                            className="flex items-center gap-2 flex-1 cursor-pointer"
+                            onClick={() => setSelectedSpaceId(selectedSpaceId === space.id ? '' : space.id)}
+                          >                            
                             <span className="font-medium">{space.name}</span>
                           </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditSpace(space);
+                            }}
+                            className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 ml-2"
+                            title="Edit space"
+                          >
+                            ✏️
+                          </button>
                         </div>
 
                         {/* Selected Space: Show Placements Section */}
@@ -1667,14 +1791,65 @@ function DesignStudioContent() {
                                 <div key={placement.id} className={`border rounded mb-2 ${selectedPlacementId === placement.id ? 'border-green-500 bg-green-50' : 'border-gray-200'}`}>
                                   {/* Placement Header */}
                                   <div 
-                                    className={`flex items-center justify-between p-2 cursor-pointer hover:bg-gray-50 ${
+                                    className={`flex items-center justify-between p-2 hover:bg-gray-50 ${
                                       selectedPlacementId === placement.id ? 'bg-green-100' : ''
                                     }`}
-                                    onClick={() => setSelectedPlacementId(selectedPlacementId === placement.id ? '' : placement.id)}
                                   >
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-sm font-medium">{placement.name}</span>
+                                    <div 
+                                      className="flex items-center gap-2 flex-1 cursor-pointer"
+                                      onClick={() => setSelectedPlacementId(selectedPlacementId === placement.id ? '' : placement.id)}
+                                    >
+                                      {editingPlacementName?.id === placement.dbId ? (
+                                        <div className="flex items-center gap-2 flex-1" onClick={(e) => e.stopPropagation()}>
+                                          <input
+                                            type="text"
+                                            value={editingPlacementName?.name || ''}
+                                            onChange={(e) => setEditingPlacementName(editingPlacementName ? {
+                                              id: editingPlacementName.id,
+                                              name: e.target.value
+                                            } : null)}
+                                            className="text-sm font-medium border border-gray-300 rounded px-2 py-1 flex-1"
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter') {
+                                                handleSavePlacementName();
+                                              } else if (e.key === 'Escape') {
+                                                handleCancelEditPlacementName();
+                                              }
+                                            }}
+                                            onBlur={handleSavePlacementName}
+                                            autoFocus
+                                          />
+                                          <button
+                                            onClick={handleSavePlacementName}
+                                            className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+                                            title="Save name"
+                                          >
+                                            ✓
+                                          </button>
+                                          <button
+                                            onClick={handleCancelEditPlacementName}
+                                            className="text-xs px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
+                                            title="Cancel edit"
+                                          >
+                                            ✕
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <span className="text-sm font-medium">{placement.name}</span>
+                                      )}
                                     </div>
+                                    {editingPlacementName?.id !== placement.dbId && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleEditPlacementName(placement);
+                                        }}
+                                        className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 ml-2"
+                                        title="Edit placement name"
+                                      >
+                                        ✏️
+                                      </button>
+                                    )}
                                   </div>
 
                                   {/* Selected Placement: Show Product Upload */}
@@ -1936,13 +2111,14 @@ function DesignStudioContent() {
         onSceneCreated={handleSceneCreated}
       />
 
-      {/* Create Space Modal */}
+      {/* Create/Edit Space Modal */}
       <CreateSpaceModal
         isOpen={showCreateSpace}
-        onClose={() => setShowCreateSpace(false)}
-        onSpaceCreated={handleSpaceCreated}
+        onClose={handleCreateSpaceModalClose}
+        onSpaceCreated={editingSpace ? handleSpaceUpdated : handleSpaceCreated}
         currentSceneId={currentSceneId}
         currentSceneDbId={getCurrentScene()?.dbId}
+        editingSpace={editingSpace}
       />
       
       {/* Add Product Image Modal */}
