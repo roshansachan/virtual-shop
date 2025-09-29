@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import StaticHeader from './StaticHeader';
 import RoomNavigation from './RoomNavigation';
@@ -44,8 +44,13 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
   const [selectedScene, setSelectedScene] = useState<Scene | null>(null);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [showLeftPanel, setShowLeftPanel] = useState(false);
+  const [isHudVisible, setIsHudVisible] = useState(true);
 
   const searchParams = useSearchParams();
+
+  // Refs for idle timer and touch tracking
+  const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   // Use ref to store callback to avoid dependency issues
   const onSelectedSpaceChangeRef = useRef(onSelectedSpaceChange);
@@ -54,6 +59,63 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
   useEffect(() => {
     onSelectedSpaceChangeRef.current = onSelectedSpaceChange;
   }, [onSelectedSpaceChange]);
+
+  // Functions for HUD visibility management
+  const showHud = useCallback(() => {
+    setIsHudVisible(true);
+    if (idleTimerRef.current) {
+      clearTimeout(idleTimerRef.current);
+    }
+    idleTimerRef.current = setTimeout(() => {
+      setIsHudVisible(false);
+    }, 3000);
+  }, []);
+
+  const handleTouchStart = useCallback((e: TouchEvent) => {
+    const touch = e.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  }, []);
+
+  const handleTouchEnd = useCallback((e: TouchEvent) => {
+    if (!touchStartRef.current) return;
+
+    const touch = e.changedTouches[0];
+    const deltaX = Math.abs(touch.clientX - touchStartRef.current.x);
+    const deltaY = Math.abs(touch.clientY - touchStartRef.current.y);
+    const threshold = 10; // pixels
+
+    // Only show HUD if it's a tap (not a swipe/scroll)
+    if (deltaX < threshold && deltaY < threshold) {
+      showHud();
+    }
+
+    touchStartRef.current = null;
+  }, [showHud]);
+
+  // Set up idle timer on mount
+  useEffect(() => {
+    showHud(); // Start with HUD visible
+
+    return () => {
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+      }
+    };
+  }, [showHud]);
+
+  // Set up touch event listeners
+  useEffect(() => {
+    const handleTouchStartEvent = (e: TouchEvent) => handleTouchStart(e);
+    const handleTouchEndEvent = (e: TouchEvent) => handleTouchEnd(e);
+
+    document.addEventListener('touchstart', handleTouchStartEvent, { passive: true });
+    document.addEventListener('touchend', handleTouchEndEvent, { passive: true });
+
+    return () => {
+      document.removeEventListener('touchstart', handleTouchStartEvent);
+      document.removeEventListener('touchend', handleTouchEndEvent);
+    };
+  }, [handleTouchStart, handleTouchEnd]);
 
   // Fetch scenes on component mount
   useEffect(() => {
@@ -139,7 +201,7 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
   };
 
   return (
-    <div className="fixed inset-0 z-20 pointer-events-none font-belleza">
+    <div className={`fixed inset-0 z-20 pointer-events-none font-belleza transition-opacity duration-300 ${isHudVisible ? 'opacity-100' : 'opacity-0'}`}>
       {/* Top Header */}
       <div className={`absolute left-0 right-0 bg-gradient-to-b from-black to-transparent px-6 py-4 pointer-events-auto transition-all duration-300 ease-in-out ${
         showLeftPanel ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
