@@ -27,7 +27,7 @@ interface Placement {
 }
 
 interface SpaceRendererProps {
-  spaceId?: string
+  spaceId: string | null;
   hideIndicators?: boolean
 }
 
