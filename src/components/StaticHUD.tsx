@@ -67,12 +67,22 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     }
     idleTimerRef.current = setTimeout(() => {
       setIsHudVisible(false);
-    }, 3000);
+    }, 5000); // 5 seconds of inactivity
   }, []);
 
   const handleClick = useCallback(() => {
-    showHud();
-  }, [showHud]);
+    if (isHudVisible) {
+      // If HUD is visible, hide it and clear the timer
+      setIsHudVisible(false);
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+        idleTimerRef.current = null;
+      }
+    } else {
+      // If HUD is hidden, show it and start the timer
+      showHud();
+    }
+  }, [isHudVisible, showHud]);
 
   // Set up idle timer on mount
   useEffect(() => {
