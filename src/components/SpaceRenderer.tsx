@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import Image from 'next/image'
 import ProductSelectionDrawer from './ProductSelectionDrawer'
+import StoriesModal from './StoriesModal'
 import type { SpaceConfig } from '@/types/index'
 
 // Types for the space-based configuration
@@ -21,6 +22,7 @@ interface ProductImage {
 interface Placement {
   id: string
   name: string
+  art_story_id?: number | null
   expanded: boolean
   visible: boolean
   products: ProductImage[]
@@ -38,6 +40,9 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
   const [error, setError] = useState<string | null>(null)
   const [selectedPlacement, setSelectedPlacement] = useState<Placement | null>(null)
   const [showDrawer, setShowDrawer] = useState(false)
+  const [artStoryData, setArtStoryData] = useState<any>(null)
+  const [artStoryLoading, setArtStoryLoading] = useState(false)
+  const [showStoriesModal, setShowStoriesModal] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
@@ -209,14 +214,60 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
   }
 
   /**
-   * Handles hotspot click to show placement options
+   * Fetches art stories for a specific placement
    */
-  const handleHotspotClick = (placement: Placement) => {
-    setSelectedPlacement(placement)
-    setShowDrawer(true)
-  }
+  const fetchArtStoriesForPlacement = useCallback(async (artStoryId: number) => {
+    try {
+      setArtStoryLoading(true);
+      console.log('Fetching art stories for art_story_id:', artStoryId);
+      const response = await fetch(`/api/art-stories/${artStoryId}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        console.log('Art stories response:', data.data);
+        setArtStoryData(data.data);
+        return data.data;
+      } else {
+        console.error('Failed to fetch art stories:', data.error);
+        setArtStoryData(null);
+        return null;
+      }
+    } catch (error) {
+      console.error('Error fetching art stories:', error);
+      setArtStoryData(null);
+      return null;
+    } finally {
+      setArtStoryLoading(false);
+    }
+  }, []);
 
   /**
+   * Handles story icon click to open stories modal
+   */
+  const handleStoryIconClick = useCallback(() => {
+    if (artStoryData) {
+      setShowStoriesModal(true);
+    }
+  }, [artStoryData]);
+
+  /**
+   * Handles hotspot click to show placement options
+   */
+  const handleHotspotClick = async (placement: Placement) => {
+    console.log('Hotspot clicked for placement:', placement.name, 'with art_story_id:', placement.art_story_id);
+    
+    // Open drawer immediately
+    setSelectedPlacement(placement)
+    setShowDrawer(true)
+    
+    // Fetch art stories asynchronously if the placement has an art_story_id
+    if (placement.art_story_id) {
+      fetchArtStoriesForPlacement(placement.art_story_id);
+    } else {
+      console.log('No art_story_id found for this placement');
+      setArtStoryData(null);
+    }
+  }  /**
    * Handles product switching within a placement
    */
   const handleImageSwitch = (newImage: ProductImage) => {
@@ -504,6 +555,16 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
         placement={selectedPlacement}
         onClose={closeDrawer}
         onProductSwitch={handleImageSwitch}
+        artStory={artStoryData}
+        artStoryLoading={artStoryLoading}
+        onStoryClick={handleStoryIconClick}
+      />
+
+      {/* Stories Modal */}
+      <StoriesModal
+        isOpen={showStoriesModal}
+        onClose={() => setShowStoriesModal(false)}
+        artStory={artStoryData}
       />
     </div>
   )

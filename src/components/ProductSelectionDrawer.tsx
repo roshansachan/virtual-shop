@@ -24,11 +24,29 @@ interface ProductSelectionDrawerProps {
   placement: Placement | null
   onClose: () => void
   onProductSwitch: (product: Product) => void
+  artStory?: {
+    id: number;
+    title: string;
+    stories: Array<{
+      id: string;
+      media: {
+        type: 'image' | 'video';
+        s3Key: string;
+      };
+      title?: string;
+      description?: string;
+    }>;
+  } | null;
+  artStoryLoading?: boolean;
+  onStoryClick?: () => void;
 }
 
 export default function ProductSelectionDrawer({
   isOpen,
   placement,
+  artStory,
+  artStoryLoading = false,
+  onStoryClick,
   onClose,
   onProductSwitch
 }: ProductSelectionDrawerProps) {
@@ -337,7 +355,21 @@ export default function ProductSelectionDrawer({
   if (!shouldRender || !placement) return null
 
   return (
-    <div className={`fixed inset-0 bg-black/50 z-30 flex items-end font-belleza transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
+    <>
+      <style jsx>{`
+        @keyframes progress-spin {
+          0% {
+            stroke-dashoffset: 125.6;
+          }
+          50% {
+            stroke-dashoffset: 31.4;
+          }
+          100% {
+            stroke-dashoffset: 125.6;
+          }
+        }
+      `}</style>
+      <div className={`fixed inset-0 bg-black/50 z-30 flex items-end font-belleza transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
       <div 
         ref={drawerRef}
         className="bg-black w-full rounded-t-3xl shadow-lg max-h-[85vh] flex flex-col"
@@ -360,21 +392,59 @@ export default function ProductSelectionDrawer({
         {/* Drawer Header */}
         <div className="flex justify-between items-center px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
-              <Image
-                src="/story-icon.png"
-                alt="Story icon"
-                width={44}
-                height={44}
-                className="w-full h-full object-cover"
-              />
+            <div className="relative">
+              {/* Circular Progress Indicator */}
+              {artStoryLoading && (
+                <div className="absolute inset-0 w-11 h-11">
+                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 44 44">
+                    <circle
+                      cx="22"
+                      cy="22"
+                      r="20"
+                      stroke="rgba(255, 255, 255, 0.2)"
+                      strokeWidth="2"
+                      fill="none"
+                    />
+                    <circle
+                      cx="22"
+                      cy="22"
+                      r="20"
+                      stroke="white"
+                      strokeWidth="2"
+                      fill="none"
+                      strokeDasharray="125.6"
+                      strokeDashoffset="125.6"
+                      className="animate-spin"
+                      style={{
+                        animation: 'progress-spin 1.5s linear infinite'
+                      }}
+                    />
+                  </svg>
+                </div>
+              )}
+              
+              <button 
+                onClick={artStory && onStoryClick ? onStoryClick : undefined}
+                disabled={!artStory || artStoryLoading}
+                className={`w-11 h-11 rounded-full bg-white/10 flex items-center justify-center overflow-hidden transition-all ${
+                  artStory && !artStoryLoading ? 'hover:bg-white/20 cursor-pointer' : 'opacity-50 cursor-not-allowed'
+                }`}
+              >
+                <Image
+                  src="/story-icon.png"
+                  alt="Story icon"
+                  width={44}
+                  height={44}
+                  className="w-full h-full object-cover"
+                />
+              </button>
             </div>
             <div className="flex flex-col">
               <h3 className="text-xl text-white font-normal leading-tight" style={{ fontFamily: 'Belleza', letterSpacing: '-0.02em' }}>
                 {placement.name}
               </h3>
               <p className="text-xs text-[#FFEC8E] font-normal leading-tight" style={{ fontFamily: 'Belleza', letterSpacing: '-0.02em' }}>
-                Unfold The Story→
+                {artStoryLoading ? 'Loading story...' : 'Unfold The Story→'}
               </p>
             </div>
           </div>
@@ -525,5 +595,6 @@ export default function ProductSelectionDrawer({
         </div>
       </div>
     </div>
+    </>
   )
 }
