@@ -149,7 +149,16 @@ export async function GET(
           width: position.width || 100,
           height: position.height || 100,
           x: position.x || 0,
-          y: position.y || 0
+          y: position.y || 0,
+          productInfo: row.product_id ? {
+            productId: row.product_id,
+            productName: row.product_name,
+            originalPrice: row.original_price,
+            discountPercentage: row.discount_percentage,
+            productImage: row.product_image && !isS3Url(row.product_image)
+              ? s3KeyToUrl(row.product_image)
+              : row.product_image
+          } : null
         });
       }
     });
