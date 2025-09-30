@@ -589,6 +589,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
                     top: `${image.y * scale}px`,
                     width: `${image.width * scale}px`,
                     height: `${image.height * scale}px`,
+                    opacity: space.type === 'street' ? 0 : 1,
                   }}
                   draggable={false}
                   onError={(e) => {

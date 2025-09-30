@@ -19,7 +19,8 @@ interface Scene {
   backgroundImage: string;
   backgroundImageSize: { width: number; height: number };
   backgroundImageS3Key?: string;
-  theme_id?: number;
+  themeId?: number;
+  themeIcon?: string;
   dbId?: string;
   type?: 'home' | 'street';
   spaces: Space[];
@@ -219,7 +220,8 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
   const streetStyles = allScenes.filter(scene => scene.type === 'street').map(scene => ({
     id: scene.id,
     name: scene.name,
-    image: scene.backgroundImage
+    image: scene.backgroundImage,
+    themeImage: scene.themeIcon,
   }));
 
   // Transform spaces for RoomNavigation

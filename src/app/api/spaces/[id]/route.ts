@@ -38,8 +38,11 @@ export async function GET(
         sp.created_at AS space_created_at,
         sp.updated_at AS space_updated_at,
         s.image AS scene_background_image,
+        s.type AS space_type,
         s.created_at AS scene_created_at,
         s.updated_at AS scene_updated_at,
+        t.id AS theme_id,
+        t.image AS theme_icon,
         p.id AS placement_id,
         p.name AS placement_name,
         p.art_story_id AS placement_art_story_id,
@@ -64,6 +67,8 @@ export async function GET(
         spaces sp
       LEFT JOIN
         scenes s ON sp.scene_id = s.id
+      LEFT JOIN
+        themes t ON s.theme_id = t.id
       LEFT JOIN
         placements p ON sp.id = p.space_id
       LEFT JOIN
@@ -110,6 +115,11 @@ export async function GET(
       backgroundImage: spaceData.space_image && !isS3Url(spaceData.space_image)
         ? s3KeyToUrl(spaceData.space_image)
         : spaceData.space_image,
+      type: spaceData.space_type,
+      themeId: spaceData.theme_id ? spaceData.theme_id.toString() : null,
+      themeIcon: spaceData.theme_icon && !isS3Url(spaceData.theme_icon)
+        ? s3KeyToUrl(spaceData.theme_icon)
+        : spaceData.theme_icon,
       // Note: backgroundImageSize will be determined client-side when image loads
       placements: [] as any[]
     };

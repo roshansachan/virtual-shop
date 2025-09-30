@@ -139,6 +139,9 @@ export interface SpaceConfig {
   id: string;
   name: string;
   image?: string;
+  themeId?: number;
+  themeIcon?: string;
+  type: string;
   backgroundImage?: string;
   backgroundImageSize?: { width: number; height: number };
   backgroundImageS3Key?: string;
