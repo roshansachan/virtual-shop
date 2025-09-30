@@ -213,13 +213,16 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     <div className={`fixed inset-0 z-20 pointer-events-none font-belleza transition-opacity duration-300 ${isHudVisible ? 'opacity-100' : 'opacity-0'}`} data-hud>
       {/* Top Header */}
       <div className={`absolute left-0 right-0 bg-gradient-to-b from-black to-transparent px-6 py-4 pointer-events-auto transition-all duration-300 ease-in-out ${
-        showLeftPanel ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
+        (showLeftPanel || !isHudVisible) ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
       }`}>
         <StaticHeader />
 
         {/* Street View Button */}
         <div className="flex justify-end">
-          <button className="bg-white text-gray-800 px-4 py-2 rounded-[12px] text-xs font-semibold flex items-center gap-0">
+          <button 
+            className={`bg-white text-gray-800 px-4 py-2 rounded-[12px] text-xs font-semibold flex items-center gap-0 ${!isHudVisible ? 'pointer-events-none' : 'pointer-events-auto'}`}
+            onClick={() => setSelectedSceneType(selectedSceneType === 'home' ? 'street' : 'home')}
+          >
             {selectedSceneType === 'home' ? <>
               <StreetIcon />
               STREET VIEW
