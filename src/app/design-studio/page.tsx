@@ -556,6 +556,44 @@ function DesignStudioContent() {
     }
   }, [getCurrentScene, fetchSpacesForScene]);
 
+  // Delete space handler
+  const handleDeleteSpace = useCallback(async (space: Space) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete the space "${space.name}"? This will delete all placements and products in this space. This action cannot be undone.`
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      const response = await fetch(`/api/spaces/${space.dbId}`, {
+        method: 'DELETE'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete space');
+      }
+      
+      const result = await response.json();
+      console.log('Space deleted:', result);
+      
+      // Clear selection if this space was selected
+      if (selectedSpaceId === space.id) {
+        setSelectedSpaceId('');
+      }
+      
+      // Refresh spaces list
+      const currentScene = getCurrentScene();
+      if (currentScene && currentScene.dbId) {
+        fetchSpacesForScene(currentScene.dbId);
+      }
+      
+      alert('Space deleted successfully!');
+    } catch (error) {
+      console.error('Error deleting space:', error);
+      alert('Failed to delete space. Please try again.');
+    }
+  }, [selectedSpaceId, getCurrentScene, fetchSpacesForScene]);
+
   // Placement management functions
   const createPlacement = useCallback(async () => {
     if (newPlacementName.trim() && selectedSpaceId) {
@@ -867,6 +905,44 @@ function DesignStudioContent() {
       fetchPlacementsForSpace(selectedSpace.dbId);
     }
   }, [getSelectedSpace, fetchPlacementsForSpace]);
+
+  // Delete placement handler
+  const handleDeletePlacement = useCallback(async (placement: any) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete the placement "${placement.name}"? This will delete all products in this placement. This action cannot be undone.`
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      const response = await fetch(`/api/placements/${placement.dbId}`, {
+        method: 'DELETE'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete placement');
+      }
+      
+      const result = await response.json();
+      console.log('Placement deleted:', result);
+      
+      // Clear selection if this placement was selected
+      if (selectedPlacementId === placement.id) {
+        setSelectedPlacementId('');
+      }
+      
+      // Refresh space data to reflect the deletion
+      const selectedSpace = getSelectedSpace();
+      if (selectedSpace && selectedSpace.dbId) {
+        fetchPlacementsForSpace(selectedSpace.dbId);
+      }
+      
+      alert('Placement deleted successfully!');
+    } catch (error) {
+      console.error('Error deleting placement:', error);
+      alert('Failed to delete placement. Please try again.');
+    }
+  }, [selectedPlacementId, getSelectedSpace, fetchPlacementsForSpace]);
 
   // Handle edit space
   const handleEditSpace = useCallback((space: any) => {
@@ -1784,16 +1860,28 @@ function DesignStudioContent() {
                           >                            
                             <span className="font-medium">{space.name}</span>
                           </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEditSpace(space);
-                            }}
-                            className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 ml-2"
-                            title="Edit space"
-                          >
-                            ✏️
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditSpace(space);
+                              }}
+                              className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                              title="Edit space"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteSpace(space);
+                              }}
+                              className="text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+                              title="Delete space"
+                            >
+                              🗑️
+                            </button>
+                          </div>
                         </div>
 
                         {/* Selected Space: Show Placements Section */}
@@ -1829,16 +1917,28 @@ function DesignStudioContent() {
                                     >
                                       <span className="text-sm font-medium">{placement.name}</span>                                    
                                     </div>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleEditPlacementName(placement);
-                                      }}
-                                      className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 ml-2"
-                                      title="Edit placement"
-                                    >
-                                      ✏️
-                                    </button>
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleEditPlacementName(placement);
+                                        }}
+                                        className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                                        title="Edit placement"
+                                      >
+                                        ✏️
+                                      </button>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeletePlacement(placement);
+                                        }}
+                                        className="text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+                                        title="Delete placement"
+                                      >
+                                        🗑️
+                                      </button>
+                                    </div>
                                   </div>
 
                                   {/* Selected Placement: Show Product Upload */}

@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, testConnection } from '@/lib/database';
+import { isS3Url } from '@/lib/s3-utils';
+import { getS3Client, getAWSBucketName } from '@/lib/s3-config';
+import { DeleteObjectCommand } from '@aws-sdk/client-s3';
 
 interface Context {
   params: Promise<{ id: string }>;
@@ -95,11 +98,34 @@ export async function DELETE(request: NextRequest, context: Context) {
       );
     }
 
+    const placementId = parseInt(id);
+    if (isNaN(placementId)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid placement ID' },
+        { status: 400 }
+      );
+    }
+
+    // Get all S3 keys for placement images that need to be deleted
+    const s3KeysQuery = `
+      SELECT image FROM placement_images 
+      WHERE placement_id = $1 AND image IS NOT NULL
+    `;
+    
+    const s3KeysResult = await query(s3KeysQuery, [placementId]);
+    const s3KeysToDelete: string[] = [];
+    
+    s3KeysResult.rows.forEach(row => {
+      if (row.image && !isS3Url(row.image)) {
+        s3KeysToDelete.push(row.image);
+      }
+    });
+
     // Delete placement
     const result = await query(`
       DELETE FROM placements WHERE id = $1
       RETURNING id, name
-    `, [parseInt(id)]);
+    `, [placementId]);
 
     if (result.rows.length === 0) {
       return NextResponse.json(
@@ -108,9 +134,32 @@ export async function DELETE(request: NextRequest, context: Context) {
       );
     }
 
+    // Delete S3 objects if any exist
+    if (s3KeysToDelete.length > 0) {
+      const s3Client = getS3Client();
+      const bucketName = getAWSBucketName();
+
+      const deletePromises = s3KeysToDelete.map(async (key) => {
+        try {
+          const deleteCommand = new DeleteObjectCommand({
+            Bucket: bucketName,
+            Key: key
+          });
+          await s3Client.send(deleteCommand);
+          console.log(`Deleted S3 object: ${key}`);
+        } catch (error) {
+          console.error(`Failed to delete S3 object ${key}:`, error);
+          // Continue with other deletions even if one fails
+        }
+      });
+
+      await Promise.allSettled(deletePromises);
+    }
+
     return NextResponse.json({
       success: true,
-      message: `Placement "${result.rows[0].name}" deleted successfully`
+      message: `Placement "${result.rows[0].name}" deleted successfully`,
+      deletedId: placementId
     });
 
   } catch (error) {

@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, testConnection } from '@/lib/database';
+import { isS3Url } from '@/lib/s3-utils';
+import { getS3Client, getAWSBucketName } from '@/lib/s3-config';
+import { DeleteObjectCommand } from '@aws-sdk/client-s3';
 
 export async function DELETE(
   request: NextRequest,
@@ -26,36 +29,60 @@ export async function DELETE(
       );
     }
 
-    // Check if placement image exists
-    const checkResult = await query(
-      'SELECT id FROM placement_images WHERE id = $1',
+    // Get the placement image data including S3 key before deletion
+    const imageResult = await query(
+      'SELECT id, name, image FROM placement_images WHERE id = $1',
       [placementImageId]
     );
 
-    if (checkResult.rows.length === 0) {
+    if (imageResult.rows.length === 0) {
       return NextResponse.json(
         { success: false, error: 'Placement image not found' },
         { status: 404 }
       );
     }
 
-    // Delete the placement image
-    const result = await query(
+    const imageData = imageResult.rows[0];
+    
+    // Delete the placement image from database
+    const deleteResult = await query(
       'DELETE FROM placement_images WHERE id = $1 RETURNING id',
       [placementImageId]
     );
 
-    if (result.rows.length === 0) {
+    if (deleteResult.rows.length === 0) {
       return NextResponse.json(
         { success: false, error: 'Failed to delete placement image' },
         { status: 500 }
       );
     }
 
+    // Delete S3 object if it exists and is an S3 key
+    if (imageData.image && !isS3Url(imageData.image)) {
+      try {
+        const s3Client = getS3Client();
+        const bucketName = getAWSBucketName();
+        
+        const deleteCommand = new DeleteObjectCommand({
+          Bucket: bucketName,
+          Key: imageData.image
+        });
+        
+        await s3Client.send(deleteCommand);
+        console.log(`Deleted S3 object: ${imageData.image}`);
+      } catch (s3Error) {
+        console.error(`Failed to delete S3 object ${imageData.image}:`, s3Error);
+        // Continue even if S3 deletion fails - the database record is already deleted
+      }
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Placement image deleted successfully',
-      data: { id: placementImageId }
+      data: { 
+        id: placementImageId,
+        name: imageData.name 
+      }
     });
 
   } catch (error) {

@@ -262,6 +262,58 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
   }, [artStoryData]);
 
   /**
+   * Handles deletion of a placement
+   */
+  const handleDeletePlacement = useCallback(async (placementId: string) => {
+    try {
+      const response = await fetch(`/api/placements/${placementId}`, {
+        method: 'DELETE'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete placement');
+      }
+      
+      const result = await response.json();
+      console.log('Placement deleted:', result);
+      
+      // Refresh space data to reflect the deletion
+      if (spaceId) {
+        await loadSpace();
+      }
+    } catch (error) {
+      console.error('Error deleting placement:', error);
+      throw error;
+    }
+  }, [spaceId]);
+
+  /**
+   * Handles deletion of a product/placement image
+   */
+  const handleDeleteProduct = useCallback(async (productId: string) => {
+    try {
+      const response = await fetch(`/api/placement-images/${productId}`, {
+        method: 'DELETE'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete product');
+      }
+      
+      const result = await response.json();
+      console.log('Product deleted:', result);
+      
+      // Refresh space data to reflect the deletion
+      if (spaceId) {
+        await loadSpace();
+      }
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      throw error;
+    }
+  }, [spaceId]);
+
+  /**
    * Handles hotspot click to show placement options
    */
   const handleHotspotClick = async (placement: Placement) => {
@@ -582,6 +634,8 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
         placement={selectedPlacement}
         onClose={closeDrawer}
         onProductSwitch={handleImageSwitch}
+        onDeletePlacement={handleDeletePlacement}
+        onDeleteProduct={handleDeleteProduct}
         artStory={artStoryData}
         artStoryLoading={artStoryLoading}
         onStoryClick={handleStoryIconClick}

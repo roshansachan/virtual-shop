@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, testConnection } from '@/lib/database';
 import { s3KeyToUrl, isS3Url } from '@/lib/s3-utils';
+import { getS3Client, getAWSBucketName } from '@/lib/s3-config';
+import { DeleteObjectCommand } from '@aws-sdk/client-s3';
 
 export async function GET(
   request: NextRequest,
@@ -175,6 +177,104 @@ export async function GET(
     console.error('Error fetching space configuration:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to fetch space configuration' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    // Test database connection
+    const isConnected = await testConnection();
+    if (!isConnected) {
+      return NextResponse.json(
+        { success: false, error: 'Database connection failed' },
+        { status: 500 }
+      );
+    }
+
+    const resolvedParams = await params;
+    const spaceId = parseInt(resolvedParams.id);
+
+    // Validate ID
+    if (isNaN(spaceId)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid space ID' },
+        { status: 400 }
+      );
+    }
+
+    // Get all S3 keys that need to be deleted
+    const s3KeysQuery = `
+      SELECT DISTINCT 
+        s.image AS space_image,
+        pi.image AS placement_image
+      FROM spaces sp
+      LEFT JOIN scenes s ON sp.scene_id = s.id
+      LEFT JOIN placements p ON sp.id = p.space_id
+      LEFT JOIN placement_images pi ON p.id = pi.placement_id
+      WHERE sp.id = $1
+        AND (s.image IS NOT NULL OR pi.image IS NOT NULL)
+    `;
+    
+    const s3KeysResult = await query(s3KeysQuery, [spaceId]);
+    const s3KeysToDelete: string[] = [];
+    
+    s3KeysResult.rows.forEach(row => {
+      if (row.space_image && !isS3Url(row.space_image)) {
+        s3KeysToDelete.push(row.space_image);
+      }
+      if (row.placement_image && !isS3Url(row.placement_image)) {
+        s3KeysToDelete.push(row.placement_image);
+      }
+    });
+
+    // Delete from database (this will cascade to related tables)
+    const deleteResult = await query('DELETE FROM spaces WHERE id = $1 RETURNING id', [spaceId]);
+    
+    if (deleteResult.rows.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Space not found' },
+        { status: 404 }
+      );
+    }
+
+    // Delete S3 objects if any exist
+    if (s3KeysToDelete.length > 0) {
+      const s3Client = getS3Client();
+      const bucketName = getAWSBucketName();
+
+      const deletePromises = s3KeysToDelete.map(async (key) => {
+        try {
+          const deleteCommand = new DeleteObjectCommand({
+            Bucket: bucketName,
+            Key: key
+          });
+          await s3Client.send(deleteCommand);
+          console.log(`Deleted S3 object: ${key}`);
+        } catch (error) {
+          console.error(`Failed to delete S3 object ${key}:`, error);
+          // Continue with other deletions even if one fails
+        }
+      });
+
+      await Promise.allSettled(deletePromises);
+    }
+
+    console.log(`Space ${spaceId} deleted successfully`);
+    return NextResponse.json({
+      success: true,
+      message: 'Space deleted successfully',
+      deletedId: spaceId
+    });
+
+  } catch (error) {
+    console.error('Error deleting space:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to delete space' },
       { status: 500 }
     );
   }

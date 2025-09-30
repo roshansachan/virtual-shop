@@ -24,6 +24,8 @@ interface ProductSelectionDrawerProps {
   placement: Placement | null
   onClose: () => void
   onProductSwitch: (product: Product) => void
+  onDeletePlacement?: (placementId: string) => Promise<void>
+  onDeleteProduct?: (productId: string) => Promise<void>
   artStory?: {
     id: number;
     title: string;
@@ -45,10 +47,12 @@ export default function ProductSelectionDrawer({
   isOpen,
   placement,
   artStory,
-  artStoryLoading = false,
-  onStoryClick,
+  artStoryLoading,
   onClose,
-  onProductSwitch
+  onProductSwitch,
+  onDeletePlacement,
+  onDeleteProduct,
+  onStoryClick
 }: ProductSelectionDrawerProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const drawerRef = useRef<HTMLDivElement>(null)
@@ -65,6 +69,41 @@ export default function ProductSelectionDrawer({
   
   // Scroll timeout ref for cleanup
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
+  // Delete confirmation state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<{ type: 'placement' | 'product', id: string, name: string } | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  
+  // Handle delete placement
+  const handleDeletePlacement = useCallback(async () => {
+    if (!showDeleteConfirm || showDeleteConfirm.type !== 'placement' || !onDeletePlacement) return
+    
+    setIsDeleting(true)
+    try {
+      await onDeletePlacement(showDeleteConfirm.id)
+      setShowDeleteConfirm(null)
+      onClose() // Close drawer after deleting placement
+    } catch (error) {
+      console.error('Failed to delete placement:', error)
+    } finally {
+      setIsDeleting(false)
+    }
+  }, [showDeleteConfirm, onDeletePlacement, onClose])
+  
+  // Handle delete product
+  const handleDeleteProduct = useCallback(async () => {
+    if (!showDeleteConfirm || showDeleteConfirm.type !== 'product' || !onDeleteProduct) return
+    
+    setIsDeleting(true)
+    try {
+      await onDeleteProduct(showDeleteConfirm.id)
+      setShowDeleteConfirm(null)
+    } catch (error) {
+      console.error('Failed to delete product:', error)
+    } finally {
+      setIsDeleting(false)
+    }
+  }, [showDeleteConfirm, onDeleteProduct])
   
   const handleDragStart = useCallback((clientY: number) => {
     setIsDragging(true)
@@ -545,9 +584,9 @@ export default function ProductSelectionDrawer({
                       </div>
                     </div>
                     
-                    {/* Action Buttons - Three in a row */}
-                    <div className="cta-buttons flex gap-3 transition-opacity duration-300 justify-center mt-6">
-                      <div className="h-8 sm:px-2.5 py-1 bg-white rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden cursor-pointer hover:bg-gray-100 transition-colors active:scale-95 min-w-[90px] px-[10px]">
+                    {/* Action Buttons - Row with delete option */}
+                    <div className="cta-buttons flex gap-2 transition-opacity duration-300 justify-center mt-6">
+                      <div className="h-8 sm:px-2.5 py-1 bg-white rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden cursor-pointer hover:bg-gray-100 transition-colors active:scale-95 min-w-[70px] px-[8px]">
                         <div className="text-[#333333] text-xs font-normal leading-none truncate">
                           Buy Now
                         </div>
@@ -555,7 +594,7 @@ export default function ProductSelectionDrawer({
 
                       <div
                         onClick={() => !product.visible && onProductSwitch(product)}
-                        className={`h-8 sm:px-2.5 py-1 rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden transition-all min-w-[90px] px-[10px] ${
+                        className={`h-8 sm:px-2.5 py-1 rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden transition-all min-w-[70px] px-[8px] ${
                           product.visible
                             ? 'bg-gray-500 cursor-not-allowed'
                             : 'border border-white/30 active:scale-95 cursor-pointer'
@@ -568,11 +607,18 @@ export default function ProductSelectionDrawer({
                         </div>
                       </div>
                       
-                      {/* <div className="flex-1 min-w-0 h-8 px-2 sm:px-2.5 py-1 border border-white/30 rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden cursor-pointer hover:bg-white/10 transition-colors active:scale-95">
-                        <div className="text-white text-xs font-normal leading-none truncate">
-                          Details
-                        </div>
-                      </div> */}
+                      {/* Delete Product Button */}
+                      {onDeleteProduct && (
+                        <button
+                          onClick={() => setShowDeleteConfirm({ type: 'product', id: product.id, name: product.name })}
+                          className="h-8 px-2 border border-red-400/30 rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden cursor-pointer hover:bg-red-500/10 transition-colors active:scale-95 min-w-[40px]"
+                          title="Delete product"
+                        >
+                          <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -598,6 +644,42 @@ export default function ProductSelectionDrawer({
         </div>
       </div>
     </div>
+    
+    {/* Delete Confirmation Modal */}
+    {showDeleteConfirm && (
+      <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg p-6 max-w-sm mx-auto">
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            Delete {showDeleteConfirm.type === 'placement' ? 'Placement' : 'Product'}
+          </h3>
+          <p className="text-gray-600 mb-4">
+            Are you sure you want to delete "{showDeleteConfirm.name}"? This action cannot be undone.
+          </p>
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => setShowDeleteConfirm(null)}
+              disabled={isDeleting}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={showDeleteConfirm.type === 'placement' ? handleDeletePlacement : handleDeleteProduct}
+              disabled={isDeleting}
+              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
+            >
+              {isDeleting && (
+                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+              )}
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </>
   )
 }
