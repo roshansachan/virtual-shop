@@ -295,6 +295,7 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
               const scene = allScenes.find(s => s.id === sceneId);
               if (scene) handleStreetSceneSelect(scene);
             }}
+            disablePointerEvents={showLeftPanel || !isHudVisible}
           />
         </div>
       )}

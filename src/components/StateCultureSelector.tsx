@@ -12,15 +12,17 @@ interface StateCultureSelectorProps {
   styles: Style[];
   selectedStyle: string;
   onStyleSelect: (sceneId: string) => void;
+  disablePointerEvents?: boolean;
 }
 
 const StateCultureSelector: React.FC<StateCultureSelectorProps> = ({
   styles,
   selectedStyle,
   onStyleSelect,
+  disablePointerEvents
 }) => {
   return (
-    <div className="flex items-center justify-center gap-4 px-4 py-3 overflow-x-auto pointer-events-auto">
+    <div className={`flex items-center justify-center gap-4 px-4 py-3 overflow-x-auto pointer-events-auto  ${disablePointerEvents ? 'pointer-events-none' : 'pointer-events-auto'}`}>
       {styles.map((style) => (
         <button
           key={style.id}
