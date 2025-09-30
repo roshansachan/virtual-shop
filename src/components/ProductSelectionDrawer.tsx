@@ -653,7 +653,7 @@ export default function ProductSelectionDrawer({
             Delete {showDeleteConfirm.type === 'placement' ? 'Placement' : 'Product'}
           </h3>
           <p className="text-gray-600 mb-4">
-            Are you sure you want to delete "{showDeleteConfirm.name}"? This action cannot be undone.
+            Are you sure you want to delete {showDeleteConfirm.name}? This action cannot be undone.
           </p>
           <div className="flex gap-3 justify-end">
             <button
