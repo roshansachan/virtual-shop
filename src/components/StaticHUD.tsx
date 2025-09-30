@@ -60,14 +60,6 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
   // Refs for idle timer
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Use ref to store callback to avoid dependency issues
-  const onSelectedSpaceChangeRef = useRef(onSelectedSpaceChange);
-
-  // Update ref when callback changes
-  useEffect(() => {
-    onSelectedSpaceChangeRef.current = onSelectedSpaceChange;
-  }, [onSelectedSpaceChange]);
-
   // Functions for HUD visibility management
   const showHud = useCallback(() => {
     setIsHudVisible(true);
@@ -187,9 +179,9 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
 
     // Only call the callback if we actually need to change the selected space
     if (selectedSpaceId !== selectedSpace) {
-      onSelectedSpaceChangeRef.current?.(selectedSpaceId);
+      onSelectedSpaceChange?.(selectedSpaceId);
     }
-  }, [spaces, selectedSpace, searchParams]);
+  }, [spaces, selectedSpace, searchParams, onSelectedSpaceChange]);
 
   const handleSceneSelect = (scene: Scene) => {
     setSelectedScene(scene);
