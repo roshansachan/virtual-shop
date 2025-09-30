@@ -16,9 +16,28 @@ export function getAWSBucketName(): string {
   return process.env.AWS_BUCKET_NAME || 'o1-virtual-shop';
 }
 
+// Get AWS region
+export function getAWSRegion(): string {
+  return process.env.AWS_REGION || 'ap-south-1';
+}
+
 // Generate S3 URL from key
 export function getS3Url(key: string): string {
   const bucketName = getAWSBucketName();
-  const region = process.env.AWS_REGION || 'ap-south-1';
+  const region = getAWSRegion();
   return `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
+}
+
+// Generate S3 key for general uploads
+export function generateS3Key(sceneId: string, placementId: string, filename: string): string {
+  const timestamp = Date.now();
+  const cleanFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+  return `scenes/${sceneId}/folders/${placementId}/${timestamp}_${cleanFilename}`;
+}
+
+// Generate S3 key for scene background uploads
+export function generateSceneBackgroundS3Key(sceneId: string, filename: string): string {
+  const timestamp = Date.now();
+  const cleanFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+  return `scenes/${sceneId}/backgrounds/${timestamp}_${cleanFilename}`;
 }
