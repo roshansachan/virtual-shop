@@ -39,15 +39,27 @@ interface SceneFile {
 }
 
 // GET - List all scenes from database
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    // Fetch scenes directly from database
-    const result = await query(
-      `SELECT s.id, s.name, s.type, s.image, s.theme_id, s.created_at, s.updated_at, sp.id as space_id, sp.name as space_name, sp.image as space_image
+    const { searchParams } = new URL(request.url);
+    const sceneType = searchParams.get('sceneType');
+
+    // Build query with optional type filter
+    let queryText = `SELECT s.id, s.name, s.type, s.image, s.theme_id, s.created_at, s.updated_at, sp.id as space_id, sp.name as space_name, sp.image as space_image
        FROM scenes s
-       LEFT JOIN spaces sp ON sp.scene_id = s.id
-       ORDER BY s.created_at DESC, sp.id`
-    );
+       LEFT JOIN spaces sp ON sp.scene_id = s.id`;
+    
+    const queryParams: any[] = [];
+    
+    if (sceneType) {
+      queryText += ` WHERE s.type = $1`;
+      queryParams.push(sceneType);
+    }
+    
+    queryText += ` ORDER BY s.created_at DESC, sp.id`;
+
+    // Fetch scenes directly from database
+    const result = await query(queryText, queryParams);
     
     const dbRows: any[] = result.rows;
     

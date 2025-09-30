@@ -21,6 +21,7 @@ interface Scene {
   backgroundImageS3Key?: string;
   theme_id?: number;
   dbId?: string;
+  type?: 'home' | 'street';
   spaces: Space[];
 }
 
@@ -51,6 +52,7 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     const sceneType = searchParams.get('sceneType');
     return sceneType === 'street' ? 'street' : 'home';
   });
+  const [allScenes, setAllScenes] = useState<Scene[]>([]);
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [selectedScene, setSelectedScene] = useState<Scene | null>(null);
   const [spaces, setSpaces] = useState<Space[]>([]);
@@ -130,17 +132,14 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     };
   }, [handleClick]);
 
-  // Fetch scenes on component mount
+  // Fetch all scenes on component mount
   useEffect(() => {
     const fetchScenes = async () => {
       try {
         const response = await fetch('/api/scenes');
         const result = await response.json();
         if (result.success) {
-          setScenes(result.data);
-          if (result.data.length > 0) {
-            setSelectedScene(result.data[0]);
-          }
+          setAllScenes(result.data);
         }
       } catch (error) {
         console.error('Failed to fetch scenes:', error);
@@ -150,12 +149,28 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     fetchScenes();
   }, []);
 
+  // Fetch scenes on scene type changes
+  useEffect(() => {
+    if (allScenes.length && selectedSceneType) {
+      const filteredScenes = allScenes.filter(scene => scene.type === selectedSceneType);
+      setScenes(filteredScenes);
+      setSelectedScene(filteredScenes.length > 0 ? filteredScenes[0] : null);
+    }
+  }, [allScenes, selectedSceneType]);
+
   // Fetch spaces when selected scene changes
   useEffect(() => {
     if (selectedScene) {
       setSpaces(selectedScene.spaces);
     }
   }, [selectedScene]);
+
+  // Set selectedSpace when spaces change
+  useEffect(() => {
+    if (selectedScene) {
+      onSelectedSpaceChange?.(selectedScene.spaces.length > 0 ? selectedScene.spaces[0].id : null);
+    }
+  }, [onSelectedSpaceChange, selectedScene, selectedScene?.spaces]);
 
   // Handle selected space validation and updates when spaces change
   useEffect(() => {
@@ -189,7 +204,7 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
   };
 
   // Transform scenes for HomeStyleSelector
-  const homeStyles = scenes.map(scene => ({
+  const homeStyles = allScenes.filter(scene => scene.type === 'home').map(scene => ({
     name: scene.name,
     image: scene.backgroundImage
   }));
