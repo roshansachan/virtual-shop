@@ -18,6 +18,7 @@ const X = ({ size = 16, className }: { size?: number; className?: string }) => (
 );
 
 interface HomeStyle {
+  id: string;
   name: string;
   image: string;
 }
@@ -28,14 +29,15 @@ interface HomeStyleSelectorProps {
   onStyleSelect: (styleName: string) => void;
   showLeftPanel: boolean;
   onTogglePanel: () => void;
+  disablePointerEvents?: boolean;
 }
 
-const HomeStyleSelector: React.FC<HomeStyleSelectorProps> = ({ styles, selectedStyle, onStyleSelect, showLeftPanel, onTogglePanel }) => {
+const HomeStyleSelector: React.FC<HomeStyleSelectorProps> = ({ styles, selectedStyle, onStyleSelect, showLeftPanel, onTogglePanel, disablePointerEvents }) => {
 
   return (
     <>
       {/* Left Panel Toggle */}
-      <div className={`absolute inline-flex bg-black/50 rounded-b-lg p-2 pointer-events-auto origin-top-left -rotate-90 transition-all duration-300 ease-in-out font-belleza ${showLeftPanel ? 'left-52 top-96' : 'left-0 top-96'}`}>
+      <div className={`absolute inline-flex bg-black/50 rounded-b-lg p-2 pointer-events-auto origin-top-left -rotate-90 transition-all duration-300 ease-in-out font-belleza ${showLeftPanel ? 'left-52 top-96' : 'left-0 top-96'} ${disablePointerEvents ? 'pointer-events-none' : 'pointer-events-auto'}`}>
         <button
           onClick={onTogglePanel}
           className="text-white text-xs uppercase writing-mode-vertical-rl transform px-2"
@@ -67,9 +69,9 @@ const HomeStyleSelector: React.FC<HomeStyleSelectorProps> = ({ styles, selectedS
               <div 
                 key={index} 
                 className={`relative rounded-lg overflow-hidden cursor-pointer transition-all duration-200 ${
-                  selectedStyle === style.name ? 'ring-2 ring-white' : 'hover:ring-1 hover:ring-white/50'
+                  selectedStyle === style.id ? 'ring-2 ring-white' : 'hover:ring-1 hover:ring-white/50'
                 }`}
-                onClick={() => onStyleSelect(style.name)}
+                onClick={() => onStyleSelect(style.id)}
               >
                 <div className="aspect-[174/104] relative">
                   <Image

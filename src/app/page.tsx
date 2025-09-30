@@ -8,9 +8,10 @@ import StaticHUD from '@/components/StaticHUD'
 
 interface HomeContentProps {
   selectedSpace: string | null;
+  handleSelectedSpaceChange?: (spaceId: string | null) => void;
 }
 
-function HomeContent({ selectedSpace }: HomeContentProps) {
+function HomeContent({ selectedSpace, handleSelectedSpaceChange }: HomeContentProps) {
   // const searchParams = useSearchParams();
   // const spaceIdParam = searchParams.get('spaceId');
 
@@ -39,6 +40,11 @@ function HomeContent({ selectedSpace }: HomeContentProps) {
       <SpaceRenderer 
         hideIndicators
         spaceId={selectedSpace}
+      />
+
+      <StaticHUD 
+        selectedSpace={selectedSpace}
+        onSelectedSpaceChange={handleSelectedSpaceChange}
       />
       
       {/* Design Studio link */}
@@ -72,10 +78,7 @@ export default function Home() {
     }>
       <HomeContent 
         selectedSpace={selectedSpace}
-      />
-      <StaticHUD 
-        selectedSpace={selectedSpace}
-        onSelectedSpaceChange={handleSelectedSpaceChange}
+        handleSelectedSpaceChange={handleSelectedSpaceChange}
       />
     </Suspense>
   );

@@ -28,7 +28,7 @@ const ShoppingCart = ({ size = 16, className }: { size?: number; className?: str
 
 const StaticHeader: React.FC = () => {
   return (
-    <div className="flex items-center justify-between mb-4">
+    <div className="flex items-center justify-between mb-4 pointer-events-none">
       {/* Logo */}
       <Image src="/mool.png" alt="Mool" width={80} height={24} className="object-contain" />
 

@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import StaticHeader from './StaticHeader';
 import RoomNavigation from './RoomNavigation';
 import HomeStyleSelector from './HomeStyleSelector';
-// import StateCultureSelector from './StateCultureSelector';
+import StateCultureSelector from './StateCultureSelector';
 
 interface StaticHUDProps {
   onClose?: () => void;
@@ -21,7 +21,8 @@ interface Scene {
   backgroundImageS3Key?: string;
   theme_id?: number;
   dbId?: string;
-  spaces: any[];
+  type?: 'home' | 'street';
+  spaces: Space[];
 }
 
 interface Space {
@@ -39,25 +40,26 @@ const StreetIcon = () => (
   </svg>
 );
 
+const HomeIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="10" viewBox="0 0 12 8" fill="none">
+    <path d="M7.49662 3.3519L4.52519 0.494833C4.38588 0.360929 4.19697 0.285706 3.99999 0.285706C3.80301 0.285706 3.6141 0.360929 3.47479 0.494833L0.503366 3.3519C0.434105 3.41808 0.3792 3.49684 0.341837 3.58358C0.304474 3.67033 0.285396 3.76335 0.285709 3.85724V7.28572C0.285709 7.39938 0.332668 7.50838 0.416256 7.58875C0.499844 7.66912 0.613213 7.71428 0.731423 7.71428H7.26856C7.38677 7.71428 7.50014 7.66912 7.58373 7.58875C7.66731 7.50838 7.71427 7.39938 7.71427 7.28572V3.85724C7.71459 3.76335 7.69551 3.67033 7.65815 3.58358C7.62078 3.49684 7.56588 3.41808 7.49662 3.3519ZM6.82285 6.85716H1.17714V3.91617L3.99999 1.20196L6.82285 3.91617V6.85716Z" fill="#333333"/>
+  </svg>
+);
+
 const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceChange }) => {
-  const [scenes, setScenes] = useState<Scene[]>([]);
+  const searchParams = useSearchParams();
+  const [selectedSceneType, setSelectedSceneType] = useState<'home' | 'street'>(() => {
+    const sceneType = searchParams.get('sceneType');
+    return sceneType === 'street' ? 'street' : 'home';
+  });
+  const [allScenes, setAllScenes] = useState<Scene[]>([]);
   const [selectedScene, setSelectedScene] = useState<Scene | null>(null);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [showLeftPanel, setShowLeftPanel] = useState(false);
   const [isHudVisible, setIsHudVisible] = useState(true);
 
-  const searchParams = useSearchParams();
-
   // Refs for idle timer
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Use ref to store callback to avoid dependency issues
-  const onSelectedSpaceChangeRef = useRef(onSelectedSpaceChange);
-
-  // Update ref when callback changes
-  useEffect(() => {
-    onSelectedSpaceChangeRef.current = onSelectedSpaceChange;
-  }, [onSelectedSpaceChange]);
 
   // Functions for HUD visibility management
   const showHud = useCallback(() => {
@@ -71,6 +73,10 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
   }, []);
 
   const handleClick = useCallback(() => {
+    if (showLeftPanel) {
+      // Don't hide HUD when left panel is open
+      return;
+    }
     if (isHudVisible) {
       // If HUD is visible, hide it and clear the timer
       setIsHudVisible(false);
@@ -82,7 +88,7 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
       // If HUD is hidden, show it and start the timer
       showHud();
     }
-  }, [isHudVisible, showHud]);
+  }, [isHudVisible, showHud, showLeftPanel]);
 
   // Set up idle timer on mount
   useEffect(() => {
@@ -95,9 +101,28 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     };
   }, [showHud]);
 
+  // Manage idle timer based on showLeftPanel
+  useEffect(() => {
+    if (showLeftPanel) {
+      // Clear the timer when left panel is open
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+        idleTimerRef.current = null;
+      }
+    } else if (isHudVisible) {
+      // Restart the timer when panel is closed and HUD is visible
+      showHud();
+    }
+  }, [showLeftPanel, isHudVisible, showHud]);
+
   // Set up click event listeners
   useEffect(() => {
-    const handleClickEvent = () => handleClick();
+    const handleClickEvent = (e: MouseEvent) => {
+      // Only toggle HUD when clicking on scene background or product images
+      if (e.target instanceof Element && (e.target.closest('.scene-bg-image') || e.target.closest('.scene-product-image'))) {
+        handleClick();
+      }
+    };
 
     document.addEventListener('click', handleClickEvent, { passive: true });
 
@@ -106,17 +131,14 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     };
   }, [handleClick]);
 
-  // Fetch scenes on component mount
+  // Fetch all scenes on component mount
   useEffect(() => {
     const fetchScenes = async () => {
       try {
         const response = await fetch('/api/scenes');
         const result = await response.json();
         if (result.success) {
-          setScenes(result.data);
-          if (result.data.length > 0) {
-            setSelectedScene(result.data[0]);
-          }
+          setAllScenes(result.data);
         }
       } catch (error) {
         console.error('Failed to fetch scenes:', error);
@@ -126,24 +148,27 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     fetchScenes();
   }, []);
 
+  // Set scenes on scene type changes
+  useEffect(() => {
+    if (allScenes.length && selectedSceneType && !selectedScene) {
+      const filteredScenes = allScenes.filter(scene => scene.type === selectedSceneType);
+      setSelectedScene(filteredScenes.length > 0 ? filteredScenes[0] : null);
+    }
+  }, [allScenes, selectedScene, selectedSceneType]);
+
   // Fetch spaces when selected scene changes
   useEffect(() => {
-    if (!selectedScene) return;
-
-    const fetchSpaces = async () => {
-      try {
-        const response = await fetch(`/api/spaces?scene_id=${selectedScene.id}`);
-        const result = await response.json();
-        if (result.success) {
-          setSpaces(result.data);
-        }
-      } catch (error) {
-        console.error('Failed to fetch spaces:', error);
-      }
-    };
-
-    fetchSpaces();
+    if (selectedScene) {
+      setSpaces(selectedScene.spaces);
+    }
   }, [selectedScene]);
+
+  // Set selectedSpace when spaces change
+  useEffect(() => {
+    if (selectedScene) {
+      onSelectedSpaceChange?.(selectedScene.spaces.length > 0 ? selectedScene.spaces[0].id : null);
+    }
+  }, [onSelectedSpaceChange, selectedScene, selectedScene?.spaces]);
 
   // Handle selected space validation and updates when spaces change
   useEffect(() => {
@@ -167,17 +192,32 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
 
     // Only call the callback if we actually need to change the selected space
     if (selectedSpaceId !== selectedSpace) {
-      onSelectedSpaceChangeRef.current?.(selectedSpaceId);
+      onSelectedSpaceChange?.(selectedSpaceId);
     }
-  }, [spaces, selectedSpace, searchParams]);
+  }, [spaces, selectedSpace, searchParams, onSelectedSpaceChange]);
 
-  const handleSceneSelect = (scene: Scene) => {
+  const handleHomeSceneSelect = (scene: Scene) => {
+    setSelectedSceneType('home');
+    setSelectedScene(scene);
+    setShowLeftPanel(false); // Close the panel when selecting a scene
+  };
+
+  const handleStreetSceneSelect = (scene: Scene) => {
+    setSelectedSceneType('street');
     setSelectedScene(scene);
     setShowLeftPanel(false); // Close the panel when selecting a scene
   };
 
   // Transform scenes for HomeStyleSelector
-  const homeStyles = scenes.map(scene => ({
+  const homeStyles = allScenes.filter(scene => scene.type === 'home').map(scene => ({
+    id: scene.id,
+    name: scene.name,
+    image: scene.backgroundImage
+  }));
+
+  // Transform scenes for StateCultureSelector
+  const streetStyles = allScenes.filter(scene => scene.type === 'street').map(scene => ({
+    id: scene.id,
     name: scene.name,
     image: scene.backgroundImage
   }));
@@ -190,55 +230,75 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
   };
 
   return (
-    <div className={`fixed inset-0 z-20 pointer-events-none font-belleza transition-opacity duration-300 ${isHudVisible ? 'opacity-100' : 'opacity-0'}`}>
+    <div className={`fixed inset-0 z-20 pointer-events-none font-belleza transition-opacity duration-300 ${isHudVisible ? 'opacity-100' : 'opacity-0'}`} data-hud>
       {/* Top Header */}
       <div className={`absolute left-0 right-0 bg-gradient-to-b from-black to-transparent px-6 py-4 pointer-events-auto transition-all duration-300 ease-in-out ${
-        showLeftPanel ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
+        (showLeftPanel || !isHudVisible) ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
       }`}>
         <StaticHeader />
 
         {/* Street View Button */}
         <div className="flex justify-end">
-          <button className="bg-white text-gray-800 px-4 py-2 rounded-[12px] text-xs font-semibold flex items-center gap-0">
-            <StreetIcon />
-            STREET VIEW
+          <button 
+            className={`bg-white text-gray-800 px-4 py-2 rounded-[12px] text-xs font-semibold flex items-center gap-0 ${!isHudVisible ? 'pointer-events-none' : 'pointer-events-auto'}`}
+            onClick={() => {
+              setSelectedScene(null); // Reset selected scene to pick a new one of the new type
+              setSelectedSceneType(selectedSceneType === 'home' ? 'street' : 'home');
+            }}
+          >
+            {selectedSceneType === 'home' ? <>
+              <StreetIcon />
+              STREET VIEW
+            </> : <>
+              <HomeIcon />
+              HOME VIEW
+            </>}
           </button>
         </div>
       </div>
 
       {/* Room Navigation */}
-      <div className={`transition-all duration-300 ease-in-out ${
-        showLeftPanel ? 'opacity-0 -translate-y-4' : 'opacity-100 translate-y-0'
-      }`}>
-        <RoomNavigation
-          rooms={rooms}
-          selectedRoomId={selectedSpace || ''}
-          onRoomSelect={handleRoomSelect}
-          disablePointerEvents={showLeftPanel || !isHudVisible}
-        />
-      </div>
+      {selectedSceneType === 'home' && (
+        <div className={`transition-all duration-300 ease-in-out ${
+          showLeftPanel ? 'opacity-0 -translate-y-4' : 'opacity-100 translate-y-0'
+        }`}>
+          <RoomNavigation
+            rooms={rooms}
+            selectedRoomId={selectedSpace || ''}
+            onRoomSelect={handleRoomSelect}
+            disablePointerEvents={showLeftPanel || !isHudVisible}
+          />
+        </div>
+      )}
 
       <HomeStyleSelector
         styles={homeStyles}
-        selectedStyle={selectedScene?.name || ''}
-        onStyleSelect={(styleName) => {
-          const scene = scenes.find(s => s.name === styleName);
-          if (scene) handleSceneSelect(scene);
+        selectedStyle={selectedScene?.id || ''}
+        onStyleSelect={(sceneId) => {
+          const scene = allScenes.find(s => s.id === sceneId);
+          if (scene) handleHomeSceneSelect(scene);
         }}
         showLeftPanel={showLeftPanel}
         onTogglePanel={() => setShowLeftPanel(!showLeftPanel)}
+        disablePointerEvents={!isHudVisible}
       />
 
       {/* Style Selector Bar */}
-      {/* <div className={`absolute bottom-0 left-0 right-0 transition-all duration-300 ease-in-out ${
-        showLeftPanel ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
-      }`}>
-        <StateCultureSelector
-          styles={styles}
-          selectedStyle={selectedStyle}
-          onStyleSelect={setSelectedStyle}
-        />
-      </div> */}
+      {selectedSceneType === 'street' && (
+        <div className={`absolute bottom-0 left-0 right-0 transition-all duration-300 ease-in-out ${
+          showLeftPanel ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
+        }`}>
+          <StateCultureSelector
+            styles={streetStyles}
+            selectedStyle={selectedScene?.id || ''}
+            onStyleSelect={(sceneId) => {
+              const scene = allScenes.find(s => s.id === sceneId);
+              if (scene) handleStreetSceneSelect(scene);
+            }}
+            disablePointerEvents={showLeftPanel || !isHudVisible}
+          />
+        </div>
+      )}
 
       {/* Bottom Navigation */}
       <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-black/64 to-transparent pointer-events-auto" />

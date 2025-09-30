@@ -369,8 +369,11 @@ export default function ProductSelectionDrawer({
           }
         }
       `}</style>
-      <div className={`fixed inset-0 bg-black/50 z-30 flex items-end font-belleza transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
-      <div 
+    <div
+      className={`fixed inset-0 bg-black/50 z-30 flex items-end font-belleza transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
+      data-drawer="true"
+    >
+      <div
         ref={drawerRef}
         className="bg-black w-full rounded-t-3xl shadow-lg max-h-[85vh] flex flex-col"
         style={{ 
@@ -422,8 +425,8 @@ export default function ProductSelectionDrawer({
                   </svg>
                 </div>
               )}
-              
-              <button 
+
+              <button
                 onClick={artStory && onStoryClick ? onStoryClick : undefined}
                 disabled={!artStory || artStoryLoading}
                 className={`w-11 h-11 rounded-full bg-white/10 flex items-center justify-center overflow-hidden transition-all ${
