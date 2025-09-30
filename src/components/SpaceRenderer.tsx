@@ -29,7 +29,7 @@ interface Placement {
 }
 
 interface SpaceRendererProps {
-  spaceId?: string
+  spaceId: string | null;
   hideIndicators?: boolean
 }
 
@@ -181,7 +181,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
   /**
    * Creates a hotspot element with pulsing animation
    */
-  const createHotspot = (image: ProductImage) => {
+  const createHotspot = (image: ProductImage, placement: Placement) => {
     const hotspotSize = 24
     const scaledX = image.x * scale
     const scaledY = image.y * scale
@@ -194,20 +194,30 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
     return (
       <div
         key={`hotspot-${image.id}`}
-        className="absolute z-20 pointer-events-none"
+        className="absolute z-20 w-12 h-12 cursor-pointer"
         style={{
-          left: `${hotspotX}px`,
-          top: `${hotspotY}px`,
-          width: `${hotspotSize}px`,
-          height: `${hotspotSize}px`,
+          left: `${hotspotX - 12}px`,
+          top: `${hotspotY - 12}px`,
         }}
+        onClick={() => handleHotspotClick(placement)}
       >
-        {/* Pulsing ring */}
-        <div className="absolute inset-0 rounded-full border-2 border-white animate-ping opacity-75" />
-        
-        {/* Inner dot */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-3 h-3 bg-white rounded-full shadow-lg" />
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            left: '50%',
+            top: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: `${hotspotSize}px`,
+            height: `${hotspotSize}px`,
+          }}
+        >
+          {/* Pulsing ring */}
+          <div className="absolute inset-0 rounded-full border-2 border-white animate-ping opacity-75" />
+          
+          {/* Inner dot */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-3 h-3 bg-white rounded-full shadow-lg" />
+          </div>
         </div>
       </div>
     )
@@ -345,6 +355,23 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
     } else {
       window.addEventListener('resize', updateViewportHeight)
       return () => window.removeEventListener('resize', updateViewportHeight)
+    }
+  }, [])
+
+  // Prevent pinch-to-zoom gestures
+  useEffect(() => {
+    const preventZoom = (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        e.preventDefault()
+      }
+    }
+
+    document.addEventListener('touchstart', preventZoom, { passive: false })
+    document.addEventListener('touchmove', preventZoom, { passive: false })
+
+    return () => {
+      document.removeEventListener('touchstart', preventZoom)
+      document.removeEventListener('touchmove', preventZoom)
     }
   }, [])
 
@@ -503,7 +530,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
                   alt={image.name}
                   width={image.width * scale}
                   height={image.height * scale}
-                  className="absolute select-none cursor-pointer"
+                  className="absolute select-none"
                   style={{
                     left: `${image.x * scale}px`,
                     top: `${image.y * scale}px`,
@@ -511,7 +538,6 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
                     height: `${image.height * scale}px`,
                   }}
                   draggable={false}
-                  onClick={() => placement && handleHotspotClick(placement)}
                   onError={(e) => {
                     console.error('Failed to load placement product:', image.src)
                     e.currentTarget.style.display = 'none'
@@ -519,7 +545,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
                 />
                 {/* Only show hotspot if placement has products */}
                 {placement && placement.products.length > 0 &&
-                  createHotspot(image)
+                  createHotspot(image, placement)
                 }
               </React.Fragment>
             )

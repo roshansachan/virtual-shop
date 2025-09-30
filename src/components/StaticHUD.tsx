@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import StaticHeader from './StaticHeader';
 import RoomNavigation from './RoomNavigation';
 import HomeStyleSelector from './HomeStyleSelector';
@@ -9,8 +9,8 @@ import HomeStyleSelector from './HomeStyleSelector';
 
 interface StaticHUDProps {
   onClose?: () => void;
-  selectedSpace?: number | null;
-  onSelectedSpaceChange?: (spaceId: number | null) => void;
+  selectedSpace?: string | null;
+  onSelectedSpaceChange?: (spaceId: string | null) => void;
 }
 
 interface Scene {
@@ -25,7 +25,7 @@ interface Scene {
 }
 
 interface Space {
-  id: number;
+  id: string;
   scene_id: number;
   name: string;
   image?: string;
@@ -44,9 +44,12 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
   const [selectedScene, setSelectedScene] = useState<Scene | null>(null);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [showLeftPanel, setShowLeftPanel] = useState(false);
+  const [isHudVisible, setIsHudVisible] = useState(true);
 
-  const router = useRouter();
   const searchParams = useSearchParams();
+
+  // Refs for idle timer
+  const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Use ref to store callback to avoid dependency issues
   const onSelectedSpaceChangeRef = useRef(onSelectedSpaceChange);
@@ -56,14 +59,52 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     onSelectedSpaceChangeRef.current = onSelectedSpaceChange;
   }, [onSelectedSpaceChange]);
 
-  // Update URL query param when selectedSpace changes
-  useEffect(() => {
-    if (selectedSpace !== null && selectedSpace !== undefined) {
-      const url = new URL(window.location.href);
-      url.searchParams.set('spaceId', selectedSpace.toString());
-      router.replace(url.toString());
+  // Functions for HUD visibility management
+  const showHud = useCallback(() => {
+    setIsHudVisible(true);
+    if (idleTimerRef.current) {
+      clearTimeout(idleTimerRef.current);
     }
-  }, [selectedSpace, router]);
+    idleTimerRef.current = setTimeout(() => {
+      setIsHudVisible(false);
+    }, 5000); // 5 seconds of inactivity
+  }, []);
+
+  const handleClick = useCallback(() => {
+    if (isHudVisible) {
+      // If HUD is visible, hide it and clear the timer
+      setIsHudVisible(false);
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+        idleTimerRef.current = null;
+      }
+    } else {
+      // If HUD is hidden, show it and start the timer
+      showHud();
+    }
+  }, [isHudVisible, showHud]);
+
+  // Set up idle timer on mount
+  useEffect(() => {
+    showHud(); // Start with HUD visible
+
+    return () => {
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+      }
+    };
+  }, [showHud]);
+
+  // Set up click event listeners
+  useEffect(() => {
+    const handleClickEvent = () => handleClick();
+
+    document.addEventListener('click', handleClickEvent, { passive: true });
+
+    return () => {
+      document.removeEventListener('click', handleClickEvent);
+    };
+  }, [handleClick]);
 
   // Fetch scenes on component mount
   useEffect(() => {
@@ -108,23 +149,25 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
   useEffect(() => {
     if (spaces.length === 0) return;
 
-    const currentSpaceValid = selectedSpace !== null && spaces.some((s: Space) => s.id === selectedSpace);
-    if (!currentSpaceValid) {
+    let selectedSpaceId: string | null = null;
+
+    // First, check if current selectedSpace is still valid
+    if (selectedSpace && spaces.some((s: Space) => s.id === selectedSpace)) {
+      selectedSpaceId = selectedSpace;
+    } else {
+      // If not valid, check URL params
       const spaceIdFromUrl = searchParams.get('spaceId');
-      let selectedSpaceId: number | null = null;
-      if (spaceIdFromUrl) {
-        const parsed = parseInt(spaceIdFromUrl);
-        if (!isNaN(parsed) && spaces.some((s: Space) => s.id === parsed)) {
-          selectedSpaceId = parsed;
-        }
-      }
-      if (selectedSpaceId === null && spaces.length > 0) {
+      if (spaceIdFromUrl && spaces.some((s: Space) => s.id === spaceIdFromUrl)) {
+        selectedSpaceId = spaceIdFromUrl;
+      } else if (spaces.length > 0) {
+        // Default to first space if nothing else is valid
         selectedSpaceId = spaces[0].id;
       }
-      // Only call the callback if we actually need to change the selected space
-      if (selectedSpaceId !== selectedSpace) {
-        onSelectedSpaceChangeRef.current?.(selectedSpaceId);
-      }
+    }
+
+    // Only call the callback if we actually need to change the selected space
+    if (selectedSpaceId !== selectedSpace) {
+      onSelectedSpaceChangeRef.current?.(selectedSpaceId);
     }
   }, [spaces, selectedSpace, searchParams]);
 
@@ -140,19 +183,14 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
   }));
 
   // Transform spaces for RoomNavigation
-  const roomNames = spaces.map(space => space.name);
+  const rooms = spaces.map(space => ({ id: space.id, name: space.name }));
 
-  const selectedRoomName = spaces.find(space => space.id === selectedSpace)?.name || '';
-
-  const handleRoomSelect = (roomName: string) => {
-    const space = spaces.find(s => s.name === roomName);
-    if (space) {
-      onSelectedSpaceChange?.(space.id);
-    }
+  const handleRoomSelect = (roomId: string) => {
+    onSelectedSpaceChange?.(roomId);
   };
 
   return (
-    <div className="fixed inset-0 z-20 pointer-events-none font-belleza">
+    <div className={`fixed inset-0 z-20 pointer-events-none font-belleza transition-opacity duration-300 ${isHudVisible ? 'opacity-100' : 'opacity-0'}`}>
       {/* Top Header */}
       <div className={`absolute left-0 right-0 bg-gradient-to-b from-black to-transparent px-6 py-4 pointer-events-auto transition-all duration-300 ease-in-out ${
         showLeftPanel ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
@@ -170,12 +208,13 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
 
       {/* Room Navigation */}
       <div className={`transition-all duration-300 ease-in-out ${
-        showLeftPanel ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
+        showLeftPanel ? 'opacity-0 -translate-y-4' : 'opacity-100 translate-y-0'
       }`}>
         <RoomNavigation
-          rooms={roomNames}
-          selectedRoom={selectedRoomName}
+          rooms={rooms}
+          selectedRoomId={selectedSpace || ''}
           onRoomSelect={handleRoomSelect}
+          disablePointerEvents={showLeftPanel || !isHudVisible}
         />
       </div>
 
