@@ -1,11 +1,13 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 
 interface Style {
   id: string;
   name: string;
   image: string;
+  themeImage?: string;
 }
 
 interface StateCultureSelectorProps {
@@ -27,13 +29,17 @@ const StateCultureSelector: React.FC<StateCultureSelectorProps> = ({
         <button
           key={style.id}
           onClick={() => onStyleSelect(style.id)}
-          className={`flex items-center gap-2 px-3 py-2 whitespace-nowrap ${
+          className={`flex items-center gap-2 whitespace-nowrap ${
             selectedStyle === style.id
               ? 'border-b-2 border-white'
               : ''
           }`}
         >
-          <span className="text-white text-sm">{style.name}</span>
+          {style.themeImage ? (
+            <Image src={style.themeImage} alt={style.name} width={62} height={27} className="object-contain" />
+          ) : (
+            <span className="text-white text-sm px-3 py-2">{style.name}</span>
+          )}
         </button>
       ))}
     </div>

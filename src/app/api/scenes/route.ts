@@ -45,9 +45,10 @@ export async function GET(request: NextRequest) {
     const sceneType = searchParams.get('sceneType');
 
     // Build query with optional type filter
-    let queryText = `SELECT s.id, s.name, s.type, s.image, s.theme_id, s.created_at, s.updated_at, sp.id as space_id, sp.name as space_name, sp.image as space_image
+    let queryText = `SELECT s.id, s.name, s.type, s.image, s.theme_id, s.created_at, s.updated_at, sp.id as space_id, sp.name as space_name, sp.image as space_image, t.image as theme_icon
        FROM scenes s
-       LEFT JOIN spaces sp ON sp.scene_id = s.id`;
+       LEFT JOIN spaces sp ON sp.scene_id = s.id
+       LEFT JOIN themes t ON s.theme_id = t.id`;
     
     const queryParams: any[] = [];
     
@@ -74,6 +75,7 @@ export async function GET(request: NextRequest) {
           type: row.type,
           image: row.image,
           theme_id: row.theme_id,
+          theme_icon: row.theme_icon,
           created_at: row.created_at,
           updated_at: row.updated_at,
           spaces: []
@@ -98,7 +100,8 @@ export async function GET(request: NextRequest) {
       backgroundImage: dbScene.image ? s3KeyToUrl(dbScene.image) : '',
       backgroundImageSize: { width: 1920, height: 1080 }, // Default size
       backgroundImageS3Key: dbScene.image || undefined,
-      theme_id: dbScene.theme_id,
+      themeId: dbScene.theme_id,
+      themeIcon: dbScene.theme_icon ? s3KeyToUrl(dbScene.theme_icon) : undefined,
       dbId: dbScene.id.toString(),
       spaces: dbScene.spaces
     }));
@@ -142,6 +145,7 @@ export async function POST(request: NextRequest) {
       backgroundImageSize: { width: 1920, height: 1080 },
       backgroundImageS3Key: dbScene.image || undefined,
       theme_id: dbScene.theme_id,
+      themeIcon: undefined, // Will be populated on GET requests
       dbId: dbScene.id.toString(),
       spaces: []
     };
@@ -216,6 +220,7 @@ export async function PUT(request: NextRequest) {
       backgroundImageSize: { width: 1920, height: 1080 },
       backgroundImageS3Key: dbScene.image || undefined,
       theme_id: dbScene.theme_id,
+      themeIcon: undefined, // Will be populated on GET requests
       dbId: dbScene.id.toString(),
       spaces: []
     };
