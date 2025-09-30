@@ -337,7 +337,10 @@ export default function ProductSelectionDrawer({
   if (!shouldRender || !placement) return null
 
   return (
-    <div className={`fixed inset-0 bg-black/50 z-30 flex items-end font-belleza transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
+    <div 
+      className={`fixed inset-0 bg-black/50 z-30 flex items-end font-belleza transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
+      data-drawer="true"
+    >
       <div 
         ref={drawerRef}
         className="bg-black w-full rounded-t-3xl shadow-lg max-h-[85vh] flex flex-col"
