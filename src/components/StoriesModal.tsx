@@ -53,6 +53,23 @@ export default function StoriesModal({ isOpen, onClose, artStory }: StoriesModal
   const stories = artStory?.stories || [];
   const currentStory = stories[currentStoryIndex];
 
+  // Debug story data and URLs
+  console.log('🎬 Stories Debug:', {
+    totalStories: stories.length,
+    currentStoryIndex,
+    currentStory: currentStory ? {
+      id: currentStory.id,
+      type: currentStory.media.type,
+      s3Key: currentStory.media.s3Key,
+      generatedUrl: generateS3Url(currentStory.media.s3Key)
+    } : null,
+    allStoryKeys: stories.map(story => ({
+      id: story.id,
+      type: story.media.type,
+      s3Key: story.media.s3Key
+    }))
+  });
+
   // Reset when modal opens/closes or story changes
   useEffect(() => {
     if (isOpen && stories.length > 0) {
@@ -402,6 +419,7 @@ export default function StoriesModal({ isOpen, onClose, artStory }: StoriesModal
           </div>
         ) : currentStory?.media.type === 'video' ? (
           <video
+            key={`video-${currentStory.id}-${currentStoryIndex}`}
             ref={videoRef}
             className="w-full h-full object-contain"
             autoPlay
