@@ -15,6 +15,7 @@ interface SceneFile {
   spaces: Array<{
     id: string;
     name: string;
+    image?: string;
     expanded: boolean;
     visible: boolean;
     placements: Array<{
@@ -42,15 +43,43 @@ export async function GET() {
   try {
     // Fetch scenes directly from database
     const result = await query(
-      `SELECT id, name, type, image, theme_id, created_at, updated_at 
-       FROM scenes 
-       ORDER BY created_at DESC`
+      `SELECT s.id, s.name, s.type, s.image, s.theme_id, s.created_at, s.updated_at, sp.id as space_id, sp.name as space_name, sp.image as space_image
+       FROM scenes s
+       LEFT JOIN spaces sp ON sp.scene_id = s.id
+       ORDER BY s.created_at DESC, sp.id`
     );
     
-    const dbScenes: DBScene[] = result.rows;
+    const dbRows: any[] = result.rows;
+    
+    // Group scenes and their spaces
+    const sceneMap = new Map();
+    dbRows.forEach(row => {
+      const sceneId = row.id;
+      if (!sceneMap.has(sceneId)) {
+        sceneMap.set(sceneId, {
+          id: row.id,
+          name: row.name,
+          type: row.type,
+          image: row.image,
+          theme_id: row.theme_id,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+          spaces: []
+        });
+      }
+      if (row.space_id) {
+        sceneMap.get(sceneId).spaces.push({
+          id: row.space_id.toString(),
+          name: row.space_name,
+          image: row.space_image,
+          expanded: true,
+          visible: true
+        });
+      }
+    });
     
     // Convert database scenes to frontend format with S3 URLs
-    const scenes = dbScenes.map(dbScene => ({
+    const scenes = Array.from(sceneMap.values()).map(dbScene => ({
       id: dbScene.id.toString(),
       name: dbScene.name,
       type: dbScene.type || undefined,
@@ -59,7 +88,7 @@ export async function GET() {
       backgroundImageS3Key: dbScene.image || undefined,
       theme_id: dbScene.theme_id,
       dbId: dbScene.id.toString(),
-      spaces: [] // Empty for now, will be populated when spaces are implemented
+      spaces: dbScene.spaces
     }));
     
     return NextResponse.json({ success: true, data: scenes });

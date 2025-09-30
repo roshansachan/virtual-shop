@@ -195,6 +195,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
       <div
         key={`hotspot-${image.id}`}
         className="absolute z-20 w-12 h-12 cursor-pointer"
+        data-hotspot="true"
         style={{
           left: `${hotspotX - 12}px`,
           top: `${hotspotY - 12}px`,
@@ -504,7 +505,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
             alt={`${space.name} - Swipe to explore`}
             width={scaledWidth}
             height={scaledHeight}
-            className="absolute top-0 left-0 w-full h-full object-cover select-none"
+            className="scene-bg-image absolute top-0 left-0 w-full h-full object-cover select-none"
             priority
             draggable={false}
             style={{
@@ -530,7 +531,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
                   alt={image.name}
                   width={image.width * scale}
                   height={image.height * scale}
-                  className="absolute select-none"
+                  className="scene-product-image absolute select-none"
                   style={{
                     left: `${image.x * scale}px`,
                     top: `${image.y * scale}px`,
