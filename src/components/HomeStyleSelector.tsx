@@ -18,6 +18,7 @@ const X = ({ size = 16, className }: { size?: number; className?: string }) => (
 );
 
 interface HomeStyle {
+  id: string;
   name: string;
   image: string;
 }
@@ -68,9 +69,9 @@ const HomeStyleSelector: React.FC<HomeStyleSelectorProps> = ({ styles, selectedS
               <div 
                 key={index} 
                 className={`relative rounded-lg overflow-hidden cursor-pointer transition-all duration-200 ${
-                  selectedStyle === style.name ? 'ring-2 ring-white' : 'hover:ring-1 hover:ring-white/50'
+                  selectedStyle === style.id ? 'ring-2 ring-white' : 'hover:ring-1 hover:ring-white/50'
                 }`}
-                onClick={() => onStyleSelect(style.name)}
+                onClick={() => onStyleSelect(style.id)}
               >
                 <div className="aspect-[174/104] relative">
                   <Image

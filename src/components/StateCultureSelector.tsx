@@ -3,14 +3,15 @@
 import React from 'react';
 
 interface Style {
+  id: string;
   name: string;
-  color?: string;
+  image: string;
 }
 
 interface StateCultureSelectorProps {
   styles: Style[];
   selectedStyle: string;
-  onStyleSelect: (styleName: string) => void;
+  onStyleSelect: (sceneId: string) => void;
 }
 
 const StateCultureSelector: React.FC<StateCultureSelectorProps> = ({
@@ -19,13 +20,13 @@ const StateCultureSelector: React.FC<StateCultureSelectorProps> = ({
   onStyleSelect,
 }) => {
   return (
-    <div className="flex items-center gap-4 px-4 py-3 overflow-x-auto pointer-events-auto">
+    <div className="flex items-center justify-center gap-4 px-4 py-3 overflow-x-auto pointer-events-auto">
       {styles.map((style) => (
         <button
-          key={style.name}
-          onClick={() => onStyleSelect(style.name)}
+          key={style.id}
+          onClick={() => onStyleSelect(style.id)}
           className={`flex items-center gap-2 px-3 py-2 whitespace-nowrap ${
-            selectedStyle === style.name
+            selectedStyle === style.id
               ? 'border-b-2 border-white'
               : ''
           }`}

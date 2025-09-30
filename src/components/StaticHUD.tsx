@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import StaticHeader from './StaticHeader';
 import RoomNavigation from './RoomNavigation';
 import HomeStyleSelector from './HomeStyleSelector';
-// import StateCultureSelector from './StateCultureSelector';
+import StateCultureSelector from './StateCultureSelector';
 
 interface StaticHUDProps {
   onClose?: () => void;
@@ -53,7 +53,6 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     return sceneType === 'street' ? 'street' : 'home';
   });
   const [allScenes, setAllScenes] = useState<Scene[]>([]);
-  const [scenes, setScenes] = useState<Scene[]>([]);
   const [selectedScene, setSelectedScene] = useState<Scene | null>(null);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [showLeftPanel, setShowLeftPanel] = useState(false);
@@ -149,14 +148,13 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     fetchScenes();
   }, []);
 
-  // Fetch scenes on scene type changes
+  // Set scenes on scene type changes
   useEffect(() => {
-    if (allScenes.length && selectedSceneType) {
+    if (allScenes.length && selectedSceneType && !selectedScene) {
       const filteredScenes = allScenes.filter(scene => scene.type === selectedSceneType);
-      setScenes(filteredScenes);
       setSelectedScene(filteredScenes.length > 0 ? filteredScenes[0] : null);
     }
-  }, [allScenes, selectedSceneType]);
+  }, [allScenes, selectedScene, selectedSceneType]);
 
   // Fetch spaces when selected scene changes
   useEffect(() => {
@@ -198,13 +196,28 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     }
   }, [spaces, selectedSpace, searchParams, onSelectedSpaceChange]);
 
-  const handleSceneSelect = (scene: Scene) => {
+  const handleHomeSceneSelect = (scene: Scene) => {
+    setSelectedSceneType('home');
+    setSelectedScene(scene);
+    setShowLeftPanel(false); // Close the panel when selecting a scene
+  };
+
+  const handleStreetSceneSelect = (scene: Scene) => {
+    setSelectedSceneType('street');
     setSelectedScene(scene);
     setShowLeftPanel(false); // Close the panel when selecting a scene
   };
 
   // Transform scenes for HomeStyleSelector
   const homeStyles = allScenes.filter(scene => scene.type === 'home').map(scene => ({
+    id: scene.id,
+    name: scene.name,
+    image: scene.backgroundImage
+  }));
+
+  // Transform scenes for StateCultureSelector
+  const streetStyles = allScenes.filter(scene => scene.type === 'street').map(scene => ({
+    id: scene.id,
     name: scene.name,
     image: scene.backgroundImage
   }));
@@ -228,7 +241,10 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
         <div className="flex justify-end">
           <button 
             className={`bg-white text-gray-800 px-4 py-2 rounded-[12px] text-xs font-semibold flex items-center gap-0 ${!isHudVisible ? 'pointer-events-none' : 'pointer-events-auto'}`}
-            onClick={() => setSelectedSceneType(selectedSceneType === 'home' ? 'street' : 'home')}
+            onClick={() => {
+              setSelectedScene(null); // Reset selected scene to pick a new one of the new type
+              setSelectedSceneType(selectedSceneType === 'home' ? 'street' : 'home');
+            }}
           >
             {selectedSceneType === 'home' ? <>
               <StreetIcon />
@@ -242,23 +258,25 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
       </div>
 
       {/* Room Navigation */}
-      <div className={`transition-all duration-300 ease-in-out ${
-        showLeftPanel ? 'opacity-0 -translate-y-4' : 'opacity-100 translate-y-0'
-      }`}>
-        <RoomNavigation
-          rooms={rooms}
-          selectedRoomId={selectedSpace || ''}
-          onRoomSelect={handleRoomSelect}
-          disablePointerEvents={showLeftPanel || !isHudVisible}
-        />
-      </div>
+      {selectedSceneType === 'home' && (
+        <div className={`transition-all duration-300 ease-in-out ${
+          showLeftPanel ? 'opacity-0 -translate-y-4' : 'opacity-100 translate-y-0'
+        }`}>
+          <RoomNavigation
+            rooms={rooms}
+            selectedRoomId={selectedSpace || ''}
+            onRoomSelect={handleRoomSelect}
+            disablePointerEvents={showLeftPanel || !isHudVisible}
+          />
+        </div>
+      )}
 
       <HomeStyleSelector
         styles={homeStyles}
-        selectedStyle={selectedScene?.name || ''}
-        onStyleSelect={(styleName) => {
-          const scene = scenes.find(s => s.name === styleName);
-          if (scene) handleSceneSelect(scene);
+        selectedStyle={selectedScene?.id || ''}
+        onStyleSelect={(sceneId) => {
+          const scene = allScenes.find(s => s.id === sceneId);
+          if (scene) handleHomeSceneSelect(scene);
         }}
         showLeftPanel={showLeftPanel}
         onTogglePanel={() => setShowLeftPanel(!showLeftPanel)}
@@ -266,15 +284,20 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
       />
 
       {/* Style Selector Bar */}
-      {/* <div className={`absolute bottom-0 left-0 right-0 transition-all duration-300 ease-in-out ${
-        showLeftPanel ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
-      }`}>
-        <StateCultureSelector
-          styles={styles}
-          selectedStyle={selectedStyle}
-          onStyleSelect={setSelectedStyle}
-        />
-      </div> */}
+      {selectedSceneType === 'street' && (
+        <div className={`absolute bottom-0 left-0 right-0 transition-all duration-300 ease-in-out ${
+          showLeftPanel ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
+        }`}>
+          <StateCultureSelector
+            styles={streetStyles}
+            selectedStyle={selectedScene?.id || ''}
+            onStyleSelect={(sceneId) => {
+              const scene = allScenes.find(s => s.id === sceneId);
+              if (scene) handleStreetSceneSelect(scene);
+            }}
+          />
+        </div>
+      )}
 
       {/* Bottom Navigation */}
       <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-black/64 to-transparent pointer-events-auto" />
