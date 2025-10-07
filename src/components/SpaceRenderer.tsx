@@ -3,7 +3,8 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import Image from 'next/image'
 import { captureCanvasForFullscreen } from '@/lib/fullscreen-utils'
-import ProductSelectionDrawer from './ProductSelectionDrawer'
+// import ProductSelectionDrawer from './ProductSelectionDrawer'
+import ProductSwipeDrawer from './ProductSwipeDrawer'
 import StoriesModal from './StoriesModal'
 import type { SpaceConfig } from '@/types/index'
 
@@ -142,9 +143,9 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
   /**
    * Calculates the scaling factor based on background dimensions and viewport
    */
-  const calculateScale = (bgWidth: number, bgHeight: number): number => {
+  const calculateScale = (bgWidth: number, bgHeight: number, availableHeight?: number): number => {
     const viewportWidth = window.innerWidth
-    const viewportHeight = window.innerHeight
+    const viewportHeight = availableHeight || window.innerHeight
 
     // Calculate scale factors for both dimensions
     const scaleX = viewportWidth / bgWidth
@@ -203,6 +204,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
         style={{
           left: `${hotspotX - 12}px`,
           top: `${hotspotY - 12}px`,
+          transition: 'left 0.3s ease-out, top 0.3s ease-out'
         }}
         onClick={() => handleHotspotClick(placement)}
       >
@@ -352,7 +354,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
       if (imageDataUrl) {
         setFullscreenImageSrc(imageDataUrl);
         setShowFullscreen(true);
-        
+
         // Wait a bit for the modal to render, then enter native fullscreen
         setTimeout(async () => {
           try {
@@ -417,7 +419,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
 
     setSpace(updatedSpace)
     setSelectedPlacement(updatedSpace.placements.find((p: Placement) => p.id === selectedPlacement.id) || null)
-    closeDrawer()
+    // closeDrawer()
   }
 
   /**
@@ -438,9 +440,11 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
     if (!space || !space.backgroundImageSize) return
 
     const updateScale = () => {
+      const availableHeight = showDrawer ? window.innerHeight * 0.77 : undefined
       const newScale = calculateScale(
         space.backgroundImageSize!.width,
-        space.backgroundImageSize!.height
+        space.backgroundImageSize!.height,
+        availableHeight
       )
       setScale(newScale)
     }
@@ -451,7 +455,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
     return () => {
       window.removeEventListener('resize', updateScale)
     }
-  }, [space])
+  }, [space, showDrawer])
 
   // Handle dynamic viewport height for mobile browsers
   useEffect(() => {
@@ -478,7 +482,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
     const preventZoom = (e: TouchEvent) => {
       // Allow zoom in fullscreen mode
       if (showFullscreen) return;
-      
+
       if (e.touches.length > 1) {
         e.preventDefault()
       }
@@ -622,6 +626,8 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
           WebkitOverflowScrolling: 'touch',
           overscrollBehavior: 'none',
           scrollSnapType: 'x proximity',
+          ...(showDrawer && { height: '77vh' }),
+          transition: 'height 0.3s ease-out'
         }}
       >
         <div 
@@ -630,7 +636,8 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
           style={{
             width: `${scaledWidth}px`,
             height: `${scaledHeight}px`,
-            minWidth: '100vw'
+            minWidth: '100vw',
+            transition: 'width 0.3s ease-out, height 0.3s ease-out'
           }}
         >
           {/* Background Image */}
@@ -672,6 +679,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
                     width: `${image.width * scale}px`,
                     height: `${image.height * scale}px`,
                     opacity: space.type === 'street' ? 0 : 1,
+                    transition: 'left 0.3s ease-out, top 0.3s ease-out, width 0.3s ease-out, height 0.3s ease-out'
                   }}
                   draggable={false}
                   onError={(e) => {
@@ -710,7 +718,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
           </svg>
         </div>
       )}
-      
+
       {/* Floating Fullscreen Button */}
       { (
         <button
@@ -718,22 +726,22 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
           className="fixed bottom-6 right-6 z-50 bg-black/80 hover:bg-black text-white p-3 rounded-full shadow-lg transition-all duration-200 hover:scale-110 active:scale-95"
           title="View in fullscreen"
         >
-          <svg 
-            className="w-6 h-6" 
-            fill="none" 
-            stroke="currentColor" 
+          <svg
+            className="w-6 h-6"
+            fill="none"
+            stroke="currentColor"
             viewBox="0 0 24 24"
           >
-            <path 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
-              strokeWidth={2} 
-              d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" 
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
             />
           </svg>
         </button>
       )}
-      
+
       {/* Fullscreen Modal */}
       {showFullscreen && fullscreenImageSrc && (
         <div className="fullscreen-container fixed inset-0 bg-black z-50">
@@ -747,14 +755,14 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-          
+
           {/* Instructions for mobile - only show in portrait mode */}
           {window.innerHeight > window.innerWidth && (
             <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-60 text-white/90 text-sm text-center bg-black/60 px-4 py-3 rounded-lg backdrop-blur-sm border border-white/20">
               <p>Rotate your device for best viewing experience</p>
             </div>
           )}
-          
+
           {/* Fullscreen Image - occupies full screen */}
           <img
             src={fullscreenImageSrc}
@@ -779,7 +787,20 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
       )}
 
       {/* Product Selection Drawer */}
-      <ProductSelectionDrawer
+      {/* <ProductSelectionDrawer
+        isOpen={showDrawer}
+        placement={selectedPlacement}
+        onClose={closeDrawer}
+        onProductSwitch={handleImageSwitch}
+        onDeletePlacement={handleDeletePlacement}
+        onDeleteProduct={handleDeleteProduct}
+        artStory={artStoryData}
+        artStoryLoading={artStoryLoading}
+        onStoryClick={handleStoryIconClick}
+      /> */}
+
+      {/* Product Swipe Drawer */}
+      <ProductSwipeDrawer
         isOpen={showDrawer}
         placement={selectedPlacement}
         onClose={closeDrawer}
