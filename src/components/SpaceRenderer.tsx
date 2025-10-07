@@ -34,6 +34,30 @@ interface SpaceRendererProps {
   hideIndicators?: boolean
 }
 
+/**
+ * Calculates the scaling factor based on background dimensions and viewport
+ */
+const calculateScale = (bgWidth: number, bgHeight: number, availableHeight?: number): number => {
+  const viewportWidth = window.innerWidth
+  const viewportHeight = availableHeight || window.innerHeight
+
+  // Calculate scale factors for both dimensions
+  const scaleX = viewportWidth / bgWidth
+  const scaleY = viewportHeight / bgHeight
+
+  // If background is larger than viewport in both dimensions, keep original size (scale = 1)
+  // This allows scrolling instead of scaling down
+  // if (bgWidth > viewportWidth && bgHeight > viewportHeight) {
+  //   return 1
+  // }
+
+  // If background is smaller than viewport, scale up to cover the viewport
+  // Use the larger scale factor to ensure the image covers the entire viewport
+  const scale = Math.max(scaleX, scaleY)
+  
+  return scale
+}
+
 export default function SpaceRenderer({ spaceId, hideIndicators = false }: SpaceRendererProps) {
   const [space, setSpace] = useState<SpaceConfig | null>(null)
   const [scale, setScale] = useState(1)
@@ -44,6 +68,15 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
   const [artStoryData, setArtStoryData] = useState<any>(null)
   const [artStoryLoading, setArtStoryLoading] = useState(false)
   const [showStoriesModal, setShowStoriesModal] = useState(false)
+<<<<<<< Updated upstream
+=======
+  const [shouldTransition, setShouldTransition] = useState(false)
+  const prevShowDrawerRef = useRef(false)
+  const [showFullscreen, setShowFullscreen] = useState(false)
+  const [fullscreenImageSrc, setFullscreenImageSrc] = useState<string | null>(null)
+  const [isNativeFullscreen, setIsNativeFullscreen] = useState(false)
+
+>>>>>>> Stashed changes
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
@@ -137,30 +170,6 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
   }, [spaceId, getImageDimensions, getAllProductDimensions])
 
   /**
-   * Calculates the scaling factor based on background dimensions and viewport
-   */
-  const calculateScale = (bgWidth: number, bgHeight: number, availableHeight?: number): number => {
-    const viewportWidth = window.innerWidth
-    const viewportHeight = availableHeight || window.innerHeight
-
-    // Calculate scale factors for both dimensions
-    const scaleX = viewportWidth / bgWidth
-    const scaleY = viewportHeight / bgHeight
-
-    // If background is larger than viewport in both dimensions, keep original size (scale = 1)
-    // This allows scrolling instead of scaling down
-    // if (bgWidth > viewportWidth && bgHeight > viewportHeight) {
-    //   return 1
-    // }
-
-    // If background is smaller than viewport, scale up to cover the viewport
-    // Use the larger scale factor to ensure the image covers the entire viewport
-    const scale = Math.max(scaleX, scaleY)
-    
-    return scale
-  }
-
-  /**
    * Gets the visible product from a placement (only one product per placement is shown)
    */
   const getVisibleImage = (placement: Placement): ProductImage | null => {
@@ -200,7 +209,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
         style={{
           left: `${hotspotX - 12}px`,
           top: `${hotspotY - 12}px`,
-          transition: 'left 0.3s ease-out, top 0.3s ease-out'
+          ...(shouldTransition && { transition: 'left 0.3s ease-out, top 0.3s ease-out' })
         }}
         onClick={() => handleHotspotClick(placement)}
       >
@@ -483,6 +492,16 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
     }
   }, [space, showDrawer])
 
+  // Track drawer state changes to enable transitions only during drawer open/close
+  useEffect(() => {
+    if (prevShowDrawerRef.current !== showDrawer) {
+      setShouldTransition(true)
+      // Reset transition flag after animation completes
+      setTimeout(() => setShouldTransition(false), 350)
+    }
+    prevShowDrawerRef.current = showDrawer
+  }, [showDrawer])
+
   if (loading) {
     return (
       <div className="w-full flex items-center justify-center bg-gray-100" style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
@@ -545,7 +564,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
           overscrollBehavior: 'none',
           scrollSnapType: 'x proximity',
           ...(showDrawer && { height: '77vh' }),
-          transition: 'height 0.3s ease-out'
+          ...(shouldTransition && { transition: 'height 0.3s ease-out' })
         }}
       >
         <div 
@@ -555,7 +574,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
             width: `${scaledWidth}px`,
             height: `${scaledHeight}px`,
             minWidth: '100vw',
-            transition: 'width 0.3s ease-out, height 0.3s ease-out'
+            ...(shouldTransition && { transition: 'width 0.3s ease-out, height 0.3s ease-out' })
           }}
         >
           {/* Background Image */}
@@ -597,7 +616,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
                     width: `${image.width * scale}px`,
                     height: `${image.height * scale}px`,
                     opacity: space.type === 'street' ? 0 : 1,
-                    transition: 'left 0.3s ease-out, top 0.3s ease-out, width 0.3s ease-out, height 0.3s ease-out'
+                    ...(shouldTransition && { transition: 'left 0.3s ease-out, top 0.3s ease-out, width 0.3s ease-out, height 0.3s ease-out' })
                   }}
                   draggable={false}
                   onError={(e) => {
