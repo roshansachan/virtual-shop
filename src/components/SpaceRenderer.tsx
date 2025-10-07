@@ -355,15 +355,18 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
         setFullscreenImageSrc(imageDataUrl);
         setShowFullscreen(true);
         
-        // For mobile compatibility, try native fullscreen immediately with user gesture
+        // Wait for the modal to render, then trigger native fullscreen
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         try {
-          if (document.documentElement.requestFullscreen) {
-            await document.documentElement.requestFullscreen();
+          const modal = document.querySelector('.fullscreen-container') as HTMLElement;
+          if (modal && modal.requestFullscreen) {
+            await modal.requestFullscreen();
             setIsNativeFullscreen(true);
           }
         } catch (error) {
-          console.log('Native fullscreen not supported or denied:', error);
-          // Modal will still work without native fullscreen
+          console.log('Native fullscreen not available, staying in modal:', error);
+          // Modal is already open, so user can still view fullscreen content
         }
       } else {
         console.error('Failed to capture canvas for fullscreen');
@@ -716,8 +719,8 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
         </div>
       )}
 
-      {/* Floating Fullscreen Button */}
-      { (
+      {/* Floating Fullscreen Button - hide in native fullscreen */}
+      {!isNativeFullscreen && (
         <button
           onClick={handleFullscreen}
           className="fixed bottom-6 right-6 z-50 bg-black/80 hover:bg-black text-white p-3 rounded-full shadow-lg transition-all duration-200 hover:scale-110 active:scale-95"
@@ -752,40 +755,11 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-
-          {/* Native Fullscreen Button - show if not in native fullscreen */}
-          {!isNativeFullscreen && (
-            <button
-              onClick={async () => {
-                try {
-                  if (document.documentElement.requestFullscreen) {
-                    await document.documentElement.requestFullscreen();
-                    setIsNativeFullscreen(true);
-                  }
-                } catch (error) {
-                  console.log('Native fullscreen not available:', error);
-                }
-              }}
-              className="fixed top-4 left-4 z-60 bg-black/50 hover:bg-black/70 text-white p-3 rounded-full transition-colors backdrop-blur-sm"
-              title="Enter native fullscreen"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-              </svg>
-            </button>
-          )}
-
+          
           {/* Instructions for mobile - only show in portrait mode */}
           {window.innerHeight > window.innerWidth && (
             <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-60 text-white/90 text-sm text-center bg-black/60 px-4 py-3 rounded-lg backdrop-blur-sm border border-white/20">
               <p>Rotate your device for best viewing experience</p>
-            </div>
-          )}
-
-          {/* Native fullscreen hint for mobile */}
-          {!isNativeFullscreen && /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && (
-            <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-60 text-white/90 text-xs text-center bg-black/60 px-3 py-2 rounded-lg backdrop-blur-sm border border-white/20">
-              <p>Tap the expand icon for immersive fullscreen</p>
             </div>
           )}
 
