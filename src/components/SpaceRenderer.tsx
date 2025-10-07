@@ -139,9 +139,9 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
   /**
    * Calculates the scaling factor based on background dimensions and viewport
    */
-  const calculateScale = (bgWidth: number, bgHeight: number): number => {
+  const calculateScale = (bgWidth: number, bgHeight: number, availableHeight?: number): number => {
     const viewportWidth = window.innerWidth
-    const viewportHeight = window.innerHeight
+    const viewportHeight = availableHeight || window.innerHeight
 
     // Calculate scale factors for both dimensions
     const scaleX = viewportWidth / bgWidth
@@ -200,6 +200,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
         style={{
           left: `${hotspotX - 12}px`,
           top: `${hotspotY - 12}px`,
+          transition: 'left 0.3s ease-out, top 0.3s ease-out'
         }}
         onClick={() => handleHotspotClick(placement)}
       >
@@ -377,9 +378,11 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
     if (!space || !space.backgroundImageSize) return
 
     const updateScale = () => {
+      const availableHeight = showDrawer ? window.innerHeight * 0.77 : undefined
       const newScale = calculateScale(
         space.backgroundImageSize!.width,
-        space.backgroundImageSize!.height
+        space.backgroundImageSize!.height,
+        availableHeight
       )
       setScale(newScale)
     }
@@ -390,7 +393,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
     return () => {
       window.removeEventListener('resize', updateScale)
     }
-  }, [space])
+  }, [space, showDrawer])
 
   // Handle dynamic viewport height for mobile browsers
   useEffect(() => {
@@ -540,7 +543,9 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
           scrollBehavior: 'smooth',
           WebkitOverflowScrolling: 'touch',
           overscrollBehavior: 'none',
-          scrollSnapType: 'x proximity'
+          scrollSnapType: 'x proximity',
+          ...(showDrawer && { height: '77vh' }),
+          transition: 'height 0.3s ease-out'
         }}
       >
         <div 
@@ -549,7 +554,8 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
           style={{
             width: `${scaledWidth}px`,
             height: `${scaledHeight}px`,
-            minWidth: '100vw'
+            minWidth: '100vw',
+            transition: 'width 0.3s ease-out, height 0.3s ease-out'
           }}
         >
           {/* Background Image */}
@@ -591,6 +597,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
                     width: `${image.width * scale}px`,
                     height: `${image.height * scale}px`,
                     opacity: space.type === 'street' ? 0 : 1,
+                    transition: 'left 0.3s ease-out, top 0.3s ease-out, width 0.3s ease-out, height 0.3s ease-out'
                   }}
                   draggable={false}
                   onError={(e) => {
