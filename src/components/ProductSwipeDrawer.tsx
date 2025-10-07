@@ -332,7 +332,7 @@ export default function ProductSwipeDrawer({
       onClick={onClose}
     >
       <div
-        className="bg-black w-full shadow-lg max-h-[33vh] h-[33vh] flex flex-col"
+        className="bg-black w-full shadow-lg max-h-[34vh] h-[34vh] flex flex-col"
         style={{ 
           transform: isVisible ? 'translateY(0px)' : 'translateY(100%)', 
           transition: 'transform 0.3s ease-out'
@@ -412,7 +412,7 @@ export default function ProductSwipeDrawer({
         {/* Snap Scrolling Image Gallery */}
         <div className="flex-1 overflow-hidden pb-5">
           <div ref={scrollContainerRef} className="h-full overflow-x-auto overflow-y-hidden snap-x snap-mandatory snap-smooth hide-scrollbars accelerated-scroll">
-            <div className="flex h-[25vh]">
+            <div className="flex h-[26vh]">
               {/* Left padding slide */}
               <div className="flex-shrink-0 flex flex-col items-center justify-center px-4 pt-4 opacity-0" style={{ width: '70%' }}>
                 <div className="w-full max-w-sm invisible">
