@@ -48,8 +48,13 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
   const [showFullscreen, setShowFullscreen] = useState(false)
   const [fullscreenImageSrc, setFullscreenImageSrc] = useState<string | null>(null)
   const [isNativeFullscreen, setIsNativeFullscreen] = useState(false)
+  const [shouldTransition, setShouldTransition] = useState(false)
+  const prevShowDrawerRef = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+
+  // Common transition style for easy customization
+  const TRANSITION_STYLE = '0.5s ease-out'
 
   /**
    * Gets the actual dimensions of an image by loading it
@@ -143,7 +148,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
   /**
    * Calculates the scaling factor based on background dimensions and viewport
    */
-  const calculateScale = (bgWidth: number, bgHeight: number, availableHeight?: number): number => {
+  const calculateScale = useCallback((bgWidth: number, bgHeight: number, availableHeight?: number): number => {
     const viewportWidth = window.innerWidth
     const viewportHeight = availableHeight || window.innerHeight
 
@@ -162,14 +167,14 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
     const scale = Math.max(scaleX, scaleY)
     
     return scale
-  }
+  }, [])
 
   /**
    * Gets the visible product from a placement (only one product per placement is shown)
    */
-  const getVisibleImage = (placement: Placement): ProductImage | null => {
+  const getVisibleImage = useCallback((placement: Placement): ProductImage | null => {
     return placement.products.find(product => product.visible) || placement.products[0] || null
-  }
+  }, [])
 
   /**
    * Gets all visible products across all placements for rendering
@@ -204,7 +209,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
         style={{
           left: `${hotspotX - 12}px`,
           top: `${hotspotY - 12}px`,
-          transition: 'left 0.3s ease-out, top 0.3s ease-out'
+          ...(shouldTransition && { transition: `left ${TRANSITION_STYLE}, top ${TRANSITION_STYLE}` })
         }}
         onClick={() => handleHotspotClick(placement)}
       >
@@ -320,6 +325,41 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
   }, [spaceId]);
 
   /**
+   * Scrolls the container to center the visible product from a placement after scaling transition
+   */
+  const scrollToProduct = useCallback((placement: Placement, drawerWillBeOpen: boolean) => {
+    setTimeout(() => {
+      const visibleProduct = getVisibleImage(placement)
+      if (visibleProduct && scrollContainerRef.current && space?.backgroundImageSize) {
+        const container = scrollContainerRef.current
+        
+        // Calculate the scale that will be used after the transition
+        const targetAvailableHeight = drawerWillBeOpen ? window.innerHeight * 0.66 : undefined
+        const targetScale = calculateScale(
+          space.backgroundImageSize.width,
+          space.backgroundImageSize.height,
+          targetAvailableHeight
+        )
+        
+        const productCenterX = visibleProduct.x * targetScale + (visibleProduct.width * targetScale) / 2
+        const productCenterY = visibleProduct.y * targetScale + (visibleProduct.height * targetScale) / 2
+        
+        // Calculate the scroll position to center the product in the viewport
+        const viewportWidth = container.clientWidth
+        const viewportHeight = container.clientHeight
+        const scrollLeft = Math.max(0, productCenterX - viewportWidth / 2)
+        const scrollTop = Math.max(0, productCenterY - viewportHeight / 2)
+        
+        container.scrollTo({
+          left: scrollLeft,
+          top: scrollTop,
+          behavior: 'smooth'
+        })
+      }
+    }, 500) // Wait for the scaling transition to complete (0.5s)
+  }, [space, calculateScale, getVisibleImage])
+
+  /**
    * Handles hotspot click to show placement options
    */
   const handleHotspotClick = async (placement: Placement) => {
@@ -336,6 +376,9 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
       console.log('No art_story_id found for this placement');
       setArtStoryData(null);
     }
+
+    // After the scaling transition completes, scroll the clicked product into view
+    scrollToProduct(placement, true) // true = drawer will be open
   }
 
   /**
@@ -426,8 +469,16 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
    * Closes the drawer
    */
   const closeDrawer = () => {
+    // Store the current placement to scroll to it after the transition
+    const placementToScroll = selectedPlacement
+    
     setShowDrawer(false)
     setSelectedPlacement(null)
+    
+    // After the scaling transition completes, scroll the product into view
+    if (placementToScroll) {
+      scrollToProduct(placementToScroll, false) // false = drawer will be closed
+    }
   }
 
   // Load space on mount or when props change
@@ -440,7 +491,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
     if (!space || !space.backgroundImageSize) return
 
     const updateScale = () => {
-      const availableHeight = showDrawer ? window.innerHeight * 0.77 : undefined
+      const availableHeight = showDrawer ? window.innerHeight * 0.66 : undefined
       const newScale = calculateScale(
         space.backgroundImageSize!.width,
         space.backgroundImageSize!.height,
@@ -455,7 +506,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
     return () => {
       window.removeEventListener('resize', updateScale)
     }
-  }, [space, showDrawer])
+  }, [space, showDrawer, calculateScale])
 
   // Handle dynamic viewport height for mobile browsers
   useEffect(() => {
@@ -565,6 +616,16 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
     }
   }, [space, showDrawer])
 
+  // Track drawer state changes to enable transitions only during drawer open/close
+  useEffect(() => {
+    if (prevShowDrawerRef.current !== showDrawer) {
+      setShouldTransition(true)
+      // Reset transition flag after animation completes
+      setTimeout(() => setShouldTransition(false), 350)
+    }
+    prevShowDrawerRef.current = showDrawer
+  }, [showDrawer])
+
   if (loading) {
     return (
       <div className="w-full flex items-center justify-center bg-gray-100" style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
@@ -616,7 +677,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
   const visibleImages = getVisibleImages()
 
   return (
-    <div className="w-full" style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
+    <div className="w-full bg-black" style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
       {/* Horizontal scroll container */}
       <div 
         ref={scrollContainerRef}
@@ -626,8 +687,8 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
           WebkitOverflowScrolling: 'touch',
           overscrollBehavior: 'none',
           scrollSnapType: 'x proximity',
-          ...(showDrawer && { height: '77vh' }),
-          transition: 'height 0.3s ease-out'
+          ...(showDrawer && { height: '66vh' }),
+          ...(shouldTransition && { transition: `height ${TRANSITION_STYLE}` })
         }}
       >
         <div 
@@ -637,7 +698,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
             width: `${scaledWidth}px`,
             height: `${scaledHeight}px`,
             minWidth: '100vw',
-            transition: 'width 0.3s ease-out, height 0.3s ease-out'
+            ...(shouldTransition && { transition: `width ${TRANSITION_STYLE}, height ${TRANSITION_STYLE}` })
           }}
         >
           {/* Background Image */}
@@ -679,7 +740,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
                     width: `${image.width * scale}px`,
                     height: `${image.height * scale}px`,
                     opacity: space.type === 'street' ? 0 : 1,
-                    transition: 'left 0.3s ease-out, top 0.3s ease-out, width 0.3s ease-out, height 0.3s ease-out'
+                    ...(shouldTransition && { transition: `left ${TRANSITION_STYLE}, top ${TRANSITION_STYLE}, width ${TRANSITION_STYLE}, height ${TRANSITION_STYLE}` })
                   }}
                   draggable={false}
                   onError={(e) => {
