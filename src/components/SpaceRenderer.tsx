@@ -356,7 +356,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
 
     setSpace(updatedSpace)
     setSelectedPlacement(updatedSpace.placements.find((p: Placement) => p.id === selectedPlacement.id) || null)
-    closeDrawer()
+    // closeDrawer()
   }
 
   /**
@@ -631,6 +631,19 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
       )}
 
       {/* Product Selection Drawer */}
+      {/* <ProductSelectionDrawer
+        isOpen={showDrawer}
+        placement={selectedPlacement}
+        onClose={closeDrawer}
+        onProductSwitch={handleImageSwitch}
+        onDeletePlacement={handleDeletePlacement}
+        onDeleteProduct={handleDeleteProduct}
+        artStory={artStoryData}
+        artStoryLoading={artStoryLoading}
+        onStoryClick={handleStoryIconClick}
+      /> */}
+
+      {/* Product Swipe Drawer */}
       <ProductSwipeDrawer
         isOpen={showDrawer}
         placement={selectedPlacement}

@@ -55,13 +55,6 @@ export default function ProductSwipeDrawer({
   onStoryClick
 }: ProductSwipeDrawerProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const drawerRef = useRef<HTMLDivElement>(null)
-  const dragHandleRef = useRef<HTMLDivElement>(null)
-  
-  // Drag state
-  const [isDragging, setIsDragging] = useState(false)
-  const [dragStartY, setDragStartY] = useState(0)
-  const [currentTransform, setCurrentTransform] = useState(0)
   
   // Animation state for smooth unmounting
   const [shouldRender, setShouldRender] = useState(false)
@@ -104,12 +97,6 @@ export default function ProductSwipeDrawer({
       setIsDeleting(false)
     }
   }, [showDeleteConfirm, onDeleteProduct])
-  
-  const handleDragStart = useCallback((clientY: number) => {
-    setIsDragging(true)
-    setDragStartY(clientY)
-    setCurrentTransform(0)
-  }, [])
 
   // Throttled scroll handler for smooth performance
   const throttledHandleScroll = useMemo(
@@ -190,92 +177,23 @@ export default function ProductSwipeDrawer({
             behavior: 'smooth'
           })
         }
+        
+        // Trigger product switch after scrolling stops and snaps to center
+        if (closestElement) {
+          const productId = (closestElement as HTMLElement).getAttribute('data-product-id')
+          if (productId && placement) {
+            const product = placement.products.find(p => p.id === productId)
+            const currentlyVisibleProduct = placement.products.find(p => p.visible)
+            if (product && !product.visible && product.id !== currentlyVisibleProduct?.id) {
+              onProductSwitch(product)
+            }
+          }
+        }
       }, 150) // Increased timeout for better UX
     }, 16), // ~60fps throttling
-    []
+    [onProductSwitch, placement]
   )
 
-  const handleDragMove = useCallback((clientY: number) => {
-    if (!isDragging) return
-    
-    const deltaY = clientY - dragStartY
-    // Only allow downward dragging (positive deltaY)
-    const transform = Math.max(0, deltaY)
-    setCurrentTransform(transform)
-    
-    if (drawerRef.current) {
-      drawerRef.current.style.transform = `translateY(${transform}px)`
-      // Linear opacity decrease: from 1.0 at 0px to 0.0 at 200px
-      const maxDragDistance = 200
-      const opacity = Math.max(0, 1 - (transform / maxDragDistance))
-      drawerRef.current.style.opacity = opacity.toString()
-    }
-  }, [isDragging, dragStartY])
-  
-  const handleDragEnd = useCallback(() => {
-    if (!isDragging) return
-    
-    setIsDragging(false)
-    
-    // If dragged down more than 100px, close the drawer
-    if (currentTransform > 100) {
-      onClose()
-    } else {
-      // Animate back to original position
-      if (drawerRef.current) {
-        drawerRef.current.style.transition = 'transform 0.3s ease-out, opacity 0.3s ease-out'
-        drawerRef.current.style.transform = 'translateY(0px)'
-        drawerRef.current.style.opacity = '1'
-        
-        // Remove transition after animation completes
-        setTimeout(() => {
-          if (drawerRef.current) {
-            drawerRef.current.style.transition = ''
-          }
-        }, 300)
-      }
-    }
-    
-    setCurrentTransform(0)
-  }, [isDragging, currentTransform, onClose])
-  
-  // Mouse events
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    handleDragStart(e.clientY)
-  }, [handleDragStart])
-  
-  // Touch events
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    handleDragStart(e.touches[0].clientY)
-  }, [handleDragStart])
-  
-  // Global mouse/touch move and end events
-  useEffect(() => {
-    if (!isDragging) return
-    
-    const handleMouseMove = (e: MouseEvent) => {
-      handleDragMove(e.clientY)
-    }
-    
-    const handleTouchMove = (e: TouchEvent) => {
-      e.preventDefault() // Prevent scrolling
-      handleDragMove(e.touches[0].clientY)
-    }
-    
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleDragEnd)
-    document.addEventListener('touchmove', handleTouchMove, { passive: false })
-    document.addEventListener('touchend', handleDragEnd)
-    
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleDragEnd)
-      document.removeEventListener('touchmove', handleTouchMove)
-      document.removeEventListener('touchend', handleDragEnd)
-    }
-  }, [isDragging, handleDragMove, handleDragEnd])
-  
   // Manage rendering and visibility for smooth animations
   useEffect(() => {
     if (isOpen) {
@@ -413,12 +331,10 @@ export default function ProductSwipeDrawer({
       data-drawer="true"
     >
       <div
-        ref={drawerRef}
         className="bg-black w-full shadow-lg max-h-[85vh] flex flex-col"
         style={{ 
           transform: isVisible ? 'translateY(0px)' : 'translateY(100%)', 
-          transition: 'transform 0.3s ease-out',
-          touchAction: 'none' // Disable pull-to-refresh when drawer is active
+          transition: 'transform 0.3s ease-out'
         }}
       >
 
@@ -544,9 +460,9 @@ export default function ProductSwipeDrawer({
                         )}
                       </div>
                       
-                      <div className="absolute bottom-6 left-3">
+                      <div className="absolute bottom-3 left-3">
                         {/* Product Details */}
-                        <div className="text-left mb-3">
+                        <div className="text-left mb-2">
                           <h4 className="text-white text-base font-normal leading-tight mb-1 overflow-hidden" style={{
                             display: '-webkit-box',
                             WebkitLineClamp: 2,
@@ -576,7 +492,7 @@ export default function ProductSwipeDrawer({
                         </div>
 
                         {/* Action Buttons - Row with delete option */}
-                        <div className="cta-buttons flex gap-2 transition-opacity duration-300 justify-start mt-2">
+                        <div className="cta-buttons flex gap-2 transition-opacity duration-300 justify-start">
                           <div className="h-8 sm:px-2.5 py-1 bg-white rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden cursor-pointer hover:bg-gray-100 transition-colors active:scale-95 min-w-[70px] px-[8px]">
                             <div className="text-[#333333] text-xs font-normal leading-none truncate">
                               Buy Now
