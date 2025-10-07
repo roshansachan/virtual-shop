@@ -46,6 +46,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
   const [showStoriesModal, setShowStoriesModal] = useState(false)
   const [showFullscreen, setShowFullscreen] = useState(false)
   const [fullscreenImageSrc, setFullscreenImageSrc] = useState<string | null>(null)
+  const [isNativeFullscreen, setIsNativeFullscreen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
@@ -336,10 +337,11 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
   }
 
   /**
-   * Handles fullscreen mode for canvas - supports both Konva stage and DOM-based capture
+   * Handles fullscreen mode - captures image and enters native browser fullscreen
    */
   const handleFullscreen = async () => {
     try {
+      // First capture the canvas as data:image
       const imageDataUrl = captureCanvasForFullscreen(
         undefined, // No Konva stage in SpaceRenderer
         containerRef,
@@ -350,11 +352,43 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
       if (imageDataUrl) {
         setFullscreenImageSrc(imageDataUrl);
         setShowFullscreen(true);
+        
+        // Wait a bit for the modal to render, then enter native fullscreen
+        setTimeout(async () => {
+          try {
+            const fullscreenContainer = document.querySelector('.fullscreen-container') as HTMLElement;
+            if (fullscreenContainer && fullscreenContainer.requestFullscreen) {
+              await fullscreenContainer.requestFullscreen();
+              setIsNativeFullscreen(true);
+            }
+          } catch (error) {
+            console.log('Native fullscreen not supported or denied:', error);
+            // Modal will still work without native fullscreen
+          }
+        }, 100);
       } else {
         console.error('Failed to capture canvas for fullscreen');
       }
     } catch (error) {
       console.error('Error capturing fullscreen:', error);
+    }
+  }
+
+  /**
+   * Handles exiting fullscreen mode
+   */
+  const handleExitFullscreen = async () => {
+    try {
+      if (isNativeFullscreen && document.exitFullscreen) {
+        await document.exitFullscreen();
+      }
+    } catch (error) {
+      console.error('Error exiting fullscreen:', error);
+    } finally {
+      // Always reset states regardless of native fullscreen success
+      setShowFullscreen(false);
+      setFullscreenImageSrc(null);
+      setIsNativeFullscreen(false);
     }
   }
 
@@ -439,9 +473,12 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
     }
   }, [])
 
-  // Prevent pinch-to-zoom gestures
+  // Prevent pinch-to-zoom gestures (allow zoom in fullscreen)
   useEffect(() => {
     const preventZoom = (e: TouchEvent) => {
+      // Allow zoom in fullscreen mode
+      if (showFullscreen) return;
+      
       if (e.touches.length > 1) {
         e.preventDefault()
       }
@@ -454,7 +491,24 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
       document.removeEventListener('touchstart', preventZoom)
       document.removeEventListener('touchmove', preventZoom)
     }
-  }, [])
+  }, [showFullscreen])
+
+  // Listen for native fullscreen changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement && isNativeFullscreen) {
+        // User exited fullscreen using browser controls (ESC key, etc.)
+        setShowFullscreen(false);
+        setIsNativeFullscreen(false);
+        setFullscreenImageSrc(null);
+      }
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    }
+  }, [isNativeFullscreen])
 
   // Enhanced smooth scrolling
   useEffect(() => {
@@ -682,22 +736,19 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
       
       {/* Fullscreen Modal */}
       {showFullscreen && fullscreenImageSrc && (
-        <div className="fixed inset-0 bg-black z-50">
+        <div className="fullscreen-container fixed inset-0 bg-black z-50">
           {/* Close button - positioned over the image */}
           <button
-            onClick={() => {
-              setShowFullscreen(false);
-              setFullscreenImageSrc(null);
-            }}
+            onClick={handleExitFullscreen}
             className="fixed top-4 right-4 z-60 bg-black/50 hover:bg-black/70 text-white p-3 rounded-full transition-colors backdrop-blur-sm"
-            title="Close fullscreen"
+            title="Exit fullscreen"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
           
-          {/* Instructions for mobile - only show in portrait mode, positioned over the image */}
+          {/* Instructions for mobile - only show in portrait mode */}
           {window.innerHeight > window.innerWidth && (
             <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-60 text-white/90 text-sm text-center bg-black/60 px-4 py-3 rounded-lg backdrop-blur-sm border border-white/20">
               <p>Rotate your device for best viewing experience</p>
@@ -710,8 +761,8 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
             alt="Fullscreen view"
             className={`w-full h-full ${window.innerHeight > window.innerWidth ? 'object-cover' : 'object-contain'}`}
             style={{
+              touchAction: 'auto', // Enable native touch gestures (zoom/pan)
               // Only apply rotation if device is in portrait mode (to suggest landscape)
-              // If device is already in landscape, display normally
               ...(window.innerHeight > window.innerWidth ? {
                 transform: 'rotate(90deg) translate(0, -100%)',
                 transformOrigin: 'top left',
