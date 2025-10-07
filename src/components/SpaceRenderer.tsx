@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import Image from 'next/image'
+import { captureCanvasForFullscreen } from '@/lib/fullscreen-utils'
 import ProductSelectionDrawer from './ProductSelectionDrawer'
 import StoriesModal from './StoriesModal'
 import type { SpaceConfig } from '@/types/index'
@@ -43,6 +44,8 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
   const [artStoryData, setArtStoryData] = useState<any>(null)
   const [artStoryLoading, setArtStoryLoading] = useState(false)
   const [showStoriesModal, setShowStoriesModal] = useState(false)
+  const [showFullscreen, setShowFullscreen] = useState(false)
+  const [fullscreenImageSrc, setFullscreenImageSrc] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
@@ -330,7 +333,32 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
       console.log('No art_story_id found for this placement');
       setArtStoryData(null);
     }
-  }  /**
+  }
+
+  /**
+   * Handles fullscreen mode for canvas - supports both Konva stage and DOM-based capture
+   */
+  const handleFullscreen = async () => {
+    try {
+      const imageDataUrl = captureCanvasForFullscreen(
+        undefined, // No Konva stage in SpaceRenderer
+        containerRef,
+        scaledWidth,
+        scaledHeight
+      );
+
+      if (imageDataUrl) {
+        setFullscreenImageSrc(imageDataUrl);
+        setShowFullscreen(true);
+      } else {
+        console.error('Failed to capture canvas for fullscreen');
+      }
+    } catch (error) {
+      console.error('Error capturing fullscreen:', error);
+    }
+  }
+
+  /**
    * Handles product switching within a placement
    */
   const handleImageSwitch = (newImage: ProductImage) => {
@@ -544,7 +572,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
       >
         <div 
           ref={containerRef}
-          className="relative"
+          className="space-container relative"
           style={{
             width: `${scaledWidth}px`,
             height: `${scaledHeight}px`,
@@ -626,6 +654,75 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
+        </div>
+      )}
+      
+      {/* Floating Fullscreen Button */}
+      { (
+        <button
+          onClick={handleFullscreen}
+          className="fixed bottom-6 right-6 z-50 bg-black/80 hover:bg-black text-white p-3 rounded-full shadow-lg transition-all duration-200 hover:scale-110 active:scale-95"
+          title="View in fullscreen"
+        >
+          <svg 
+            className="w-6 h-6" 
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path 
+              strokeLinecap="round" 
+              strokeLinejoin="round" 
+              strokeWidth={2} 
+              d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" 
+            />
+          </svg>
+        </button>
+      )}
+      
+      {/* Fullscreen Modal */}
+      {showFullscreen && fullscreenImageSrc && (
+        <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
+          {/* Close button */}
+          <button
+            onClick={() => {
+              setShowFullscreen(false);
+              setFullscreenImageSrc(null);
+            }}
+            className="absolute top-4 right-4 z-60 bg-white/20 hover:bg-white/30 text-white p-2 rounded-full transition-colors"
+            title="Close fullscreen"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          
+          {/* Fullscreen Image */}
+          <div className="w-full h-full flex items-center justify-center p-4">
+            <img
+              src={fullscreenImageSrc}
+              alt="Fullscreen view"
+              className="max-w-full max-h-full object-contain"
+              style={{
+                transform: 'rotate(0deg)',
+                // Force landscape orientation on mobile
+                ...(window.innerHeight > window.innerWidth && {
+                  transform: 'rotate(90deg)',
+                  width: '100vh',
+                  height: '100vw',
+                  maxWidth: '100vh',
+                  maxHeight: '100vw'
+                })
+              }}
+            />
+          </div>
+          
+          {/* Instructions for mobile - only show in portrait mode */}
+          {window.innerHeight > window.innerWidth && (
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-white/80 text-sm text-center">
+              <p>Rotate your device for best viewing experience</p>
+            </div>
+          )}
         </div>
       )}
 
