@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import Image from 'next/image'
-import ProductSelectionDrawer from './ProductSelectionDrawer'
+// import ProductSelectionDrawer from './ProductSelectionDrawer'
+import ProductSwipeDrawer from './ProductSwipeDrawer'
 import StoriesModal from './StoriesModal'
 import type { SpaceConfig } from '@/types/index'
 
@@ -630,7 +631,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
       )}
 
       {/* Product Selection Drawer */}
-      <ProductSelectionDrawer
+      <ProductSwipeDrawer
         isOpen={showDrawer}
         placement={selectedPlacement}
         onClose={closeDrawer}
