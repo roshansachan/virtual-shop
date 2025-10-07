@@ -540,7 +540,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
           scrollBehavior: 'smooth',
           WebkitOverflowScrolling: 'touch',
           overscrollBehavior: 'none',
-          scrollSnapType: 'x proximity',
+          scrollSnapType: 'x proximity'
         }}
       >
         <div 

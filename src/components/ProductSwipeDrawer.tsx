@@ -327,15 +327,17 @@ export default function ProductSwipeDrawer({
         }
       `}</style>
     <div
-      className={`fixed inset-0 bg-black/50 z-30 flex items-end font-belleza transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
+      className={`fixed inset-0 bg-transparent z-30 flex items-end font-belleza transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
       data-drawer="true"
+      onClick={onClose}
     >
       <div
-        className="bg-black w-full shadow-lg max-h-[85vh] flex flex-col"
+        className="bg-black w-full shadow-lg max-h-[33vh] h-[33vh] flex flex-col"
         style={{ 
           transform: isVisible ? 'translateY(0px)' : 'translateY(100%)', 
           transition: 'transform 0.3s ease-out'
         }}
+        onClick={(e) => e.stopPropagation()}
       >
 
         {/* Drawer Header */}
@@ -409,7 +411,7 @@ export default function ProductSwipeDrawer({
 
         {/* Snap Scrolling Image Gallery */}
         <div className="flex-1 overflow-hidden pb-5">
-          <div ref={scrollContainerRef} className="h-full min-h-[204px] overflow-x-auto overflow-y-hidden snap-x snap-mandatory snap-smooth hide-scrollbars accelerated-scroll">
+          <div ref={scrollContainerRef} className="h-full overflow-x-auto overflow-y-hidden snap-x snap-mandatory snap-smooth hide-scrollbars accelerated-scroll">
             <div className="flex h-[25vh]">
               {/* Left padding slide */}
               <div className="flex-shrink-0 flex flex-col items-center justify-center px-4 pt-4 opacity-0" style={{ width: '70%' }}>
@@ -428,18 +430,17 @@ export default function ProductSwipeDrawer({
               </div>
               
               {placement.products.map((product) => (
-                <div key={product.id} data-product-id={product.id} className="image-container product-card flex-shrink-0 snap-center flex flex-col items-center justify-center px-4 pt-4" style={{ width: '70%' }}>
+                <div key={product.id} data-product-id={product.id} className="image-container product-card flex-shrink-0 snap-center flex flex-col items-center justify-start px-4 pt-6" style={{ width: '70%' }}>
                   <div className="w-full max-w-sm">
                     <div className="relative image-aspect">
                       {/* Product Image - Landscape aspect ratio */}
-                      <div className="aspect-[16/11] relative bg-gray-200 rounded-2xl overflow-hidden mb-3">
+                      <div className="aspect-[16/9] relative bg-gray-200 rounded-2xl overflow-hidden mb-3">
                         {product.src ? (
                           <Image
                             src={product?.productInfo?.productImage || product.src} // Fallback to src if productImage is not available
                             alt={product.name}
-                            width={160}
-                            height={110}
-                            className="object-cover w-full h-full"
+                            fill
+                            className="object-cover"
                             onError={(e) => {
                               // Fallback to grey placeholder on error
                               const target = e.target as HTMLImageElement
