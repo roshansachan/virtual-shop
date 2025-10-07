@@ -682,14 +682,14 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
       
       {/* Fullscreen Modal */}
       {showFullscreen && fullscreenImageSrc && (
-        <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
-          {/* Close button */}
+        <div className="fixed inset-0 bg-black z-50">
+          {/* Close button - positioned over the image */}
           <button
             onClick={() => {
               setShowFullscreen(false);
               setFullscreenImageSrc(null);
             }}
-            className="absolute top-4 right-4 z-60 bg-white/20 hover:bg-white/30 text-white p-2 rounded-full transition-colors"
+            className="fixed top-4 right-4 z-60 bg-black/50 hover:bg-black/70 text-white p-3 rounded-full transition-colors backdrop-blur-sm"
             title="Close fullscreen"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -697,32 +697,33 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
             </svg>
           </button>
           
-          {/* Fullscreen Image */}
-          <div className="w-full h-full flex items-center justify-center p-4">
-            <img
-              src={fullscreenImageSrc}
-              alt="Fullscreen view"
-              className="max-w-full max-h-full object-contain"
-              style={{
-                transform: 'rotate(0deg)',
-                // Force landscape orientation on mobile
-                ...(window.innerHeight > window.innerWidth && {
-                  transform: 'rotate(90deg)',
-                  width: '100vh',
-                  height: '100vw',
-                  maxWidth: '100vh',
-                  maxHeight: '100vw'
-                })
-              }}
-            />
-          </div>
-          
-          {/* Instructions for mobile - only show in portrait mode */}
+          {/* Instructions for mobile - only show in portrait mode, positioned over the image */}
           {window.innerHeight > window.innerWidth && (
-            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-white/80 text-sm text-center">
+            <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-60 text-white/90 text-sm text-center bg-black/60 px-4 py-3 rounded-lg backdrop-blur-sm border border-white/20">
               <p>Rotate your device for best viewing experience</p>
             </div>
           )}
+          
+          {/* Fullscreen Image - occupies full screen */}
+          <img
+            src={fullscreenImageSrc}
+            alt="Fullscreen view"
+            className={`w-full h-full ${window.innerHeight > window.innerWidth ? 'object-cover' : 'object-contain'}`}
+            style={{
+              // Only apply rotation if device is in portrait mode (to suggest landscape)
+              // If device is already in landscape, display normally
+              ...(window.innerHeight > window.innerWidth ? {
+                transform: 'rotate(90deg) translate(0, -100%)',
+                transformOrigin: 'top left',
+                width: '100vh',
+                height: '100vw',
+                maxWidth: 'none',
+                maxHeight: 'none'
+              } : {
+                transform: 'rotate(0deg)'
+              })
+            }}
+          />
         </div>
       )}
 
