@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import Image from 'next/image';
 
 interface Style {
   id: string;
@@ -24,19 +23,27 @@ const StateCultureSelector: React.FC<StateCultureSelectorProps> = ({
   disablePointerEvents
 }) => {
   return (
-    <div className={`flex items-center justify-center gap-4 px-4 py-3 overflow-x-auto pointer-events-auto  ${disablePointerEvents ? 'pointer-events-none' : 'pointer-events-auto'}`}>
+    <div className={`flex items-end justify-start w-full gap-4 px-4 py-3 overflow-x-auto  ${disablePointerEvents ? 'pointer-events-none' : 'pointer-events-auto'}`}>
       {styles.map((style) => (
         <button
           key={style.id}
           onClick={() => onStyleSelect(style.id)}
-          className={`flex items-center gap-2 whitespace-nowrap ${
+          className={`flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
             selectedStyle === style.id
-              ? 'border-b-2 border-white'
+              ? 'border-b-1 border-white pb-1'
               : ''
           }`}
         >
           {style.themeImage ? (
-            <Image src={style.themeImage} alt={style.name} width={62} height={27} className="object-contain" />
+            <img
+              src={style.themeImage}
+              alt={style.name}
+              className={`h-[16px] w-auto object-contain ${
+                selectedStyle === style.id
+                  ? 'scale-110'
+                  : ''
+              }`}
+            />
           ) : (
             <span className="text-white text-sm px-3 py-2">{style.name}</span>
           )}
