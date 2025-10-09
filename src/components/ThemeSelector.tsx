@@ -44,6 +44,7 @@ const ThemeSelector: React.FC<ThemeSelectorProps> = ({
   disablePointerEvents,
   styleName
 }) => {
+  const sortedThemes = [...themes].sort((a, b) => Number(a.id) - Number(b.id));
 
   return (
     <>
@@ -76,7 +77,7 @@ const ThemeSelector: React.FC<ThemeSelectorProps> = ({
           </div>
 
           <div className="space-y-3">
-            {themes.map((theme, index) => (
+            {sortedThemes.map((theme, index) => (
               <div
                 key={index}
                 className={`relative rounded-lg overflow-hidden cursor-pointer transition-all duration-200 ${
