@@ -6,6 +6,7 @@ import StaticHeader from './StaticHeader';
 import RoomNavigation from './RoomNavigation';
 import HomeStyleSelector from './HomeStyleSelector';
 import StateCultureSelector from './StateCultureSelector';
+import ThemeSelector from './ThemeSelector';
 
 interface StaticHUDProps {
   onClose?: () => void;
@@ -21,6 +22,15 @@ interface Scene {
   backgroundImageS3Key?: string;
   themeId?: number;
   themeIcon?: string;
+  themeInfo?: {
+    id: number;
+    themeType: string;
+    name: string;
+    image: string;
+    metadata: any;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
   dbId?: string;
   type?: 'home' | 'street';
   spaces: Space[];
@@ -57,6 +67,15 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
   const [selectedScene, setSelectedScene] = useState<Scene | null>(null);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [showLeftPanel, setShowLeftPanel] = useState(false);
+  const [showThemePanel, setShowThemePanel] = useState(false);
+  const [selectedStyleName, setSelectedStyleName] = useState<string>('');
+  const [availableThemes, setAvailableThemes] = useState<Array<{
+    id: string;
+    name: string;
+    image: string;
+    themeIcon?: string;
+    themeInfo?: any;
+  }>>([]);
   const [isHudVisible, setIsHudVisible] = useState(true);
 
   // Refs for idle timer
@@ -74,8 +93,8 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
   }, []);
 
   const handleClick = useCallback(() => {
-    if (showLeftPanel) {
-      // Don't hide HUD when left panel is open
+    if (showLeftPanel || showThemePanel) {
+      // Don't hide HUD when left panel or theme panel is open
       return;
     }
     if (isHudVisible) {
@@ -89,7 +108,7 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
       // If HUD is hidden, show it and start the timer
       showHud();
     }
-  }, [isHudVisible, showHud, showLeftPanel]);
+  }, [isHudVisible, showHud, showLeftPanel, showThemePanel]);
 
   // Set up idle timer on mount
   useEffect(() => {
@@ -102,19 +121,19 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     };
   }, [showHud]);
 
-  // Manage idle timer based on showLeftPanel
+  // Manage idle timer based on showLeftPanel and showThemePanel
   useEffect(() => {
-    if (showLeftPanel) {
-      // Clear the timer when left panel is open
+    if (showLeftPanel || showThemePanel) {
+      // Clear the timer when either panel is open
       if (idleTimerRef.current) {
         clearTimeout(idleTimerRef.current);
         idleTimerRef.current = null;
       }
     } else if (isHudVisible) {
-      // Restart the timer when panel is closed and HUD is visible
+      // Restart the timer when panels are closed and HUD is visible
       showHud();
     }
-  }, [showLeftPanel, isHudVisible, showHud]);
+  }, [showLeftPanel, showThemePanel, isHudVisible, showHud]);
 
   // Set up click event listeners
   useEffect(() => {
@@ -197,10 +216,41 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     }
   }, [spaces, selectedSpace, searchParams, onSelectedSpaceChange]);
 
-  const handleHomeSceneSelect = (scene: Scene) => {
-    setSelectedSceneType('home');
-    setSelectedScene(scene);
-    setShowLeftPanel(false); // Close the panel when selecting a scene
+  const handleHomeStyleSelect = (styleId: string) => {
+    const selectedStyle = homeStyles.find(style => style.id === styleId);
+    if (!selectedStyle) return;
+
+    // Find all scenes with this style name
+    const styleScenes = allScenes.filter(scene => scene.type === 'home' && scene.name === selectedStyle.name);
+
+    if (styleScenes.length > 1) {
+      // Multiple themes available, show theme selector
+      setSelectedStyleName(selectedStyle.name);
+      setAvailableThemes(styleScenes.map(scene => ({
+        id: scene.id,
+        name: scene.name,
+        image: scene.backgroundImage,
+        themeIcon: scene.themeIcon,
+        themeInfo: scene.themeInfo
+      })));
+      setShowThemePanel(true);
+      setShowLeftPanel(false); // Close the home style panel
+    } else {
+      // Only one theme, select it directly
+      const scene = styleScenes[0];
+      if (scene) {
+        setSelectedScene(scene);
+        setShowLeftPanel(false);
+      }
+    }
+  };
+
+  const handleThemeSelect = (themeId: string) => {
+    const scene = allScenes.find(s => s.id === themeId);
+    if (scene) {
+      setSelectedScene(scene);
+      setShowThemePanel(false);
+    }
   };
 
   const handleStreetSceneSelect = (scene: Scene) => {
@@ -210,11 +260,32 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
   };
 
   // Transform scenes for HomeStyleSelector
-  const homeStyles = allScenes.filter(scene => scene.type === 'home').map(scene => ({
-    id: scene.id,
-    name: scene.name,
-    image: scene.backgroundImage
-  }));
+  const homeStyles = allScenes
+    .filter(scene => scene.type === 'home')
+    .reduce((acc, scene) => {
+      const existingStyle = acc.find(style => style.name === scene.name);
+      if (existingStyle) {
+        // If we already have this style name, check if this scene has a lower themeId
+        if (scene.themeId !== undefined && (existingStyle.themeId === undefined || scene.themeId < existingStyle.themeId)) {
+          existingStyle.id = scene.id;
+          existingStyle.image = scene.backgroundImage;
+          existingStyle.themeId = scene.themeId;
+        }
+      } else {
+        acc.push({
+          id: scene.id,
+          name: scene.name,
+          image: scene.backgroundImage,
+          themeId: scene.themeId
+        });
+      }
+      return acc;
+    }, [] as Array<{
+      id: string;
+      name: string;
+      image: string;
+      themeId?: number;
+    }>);
 
   // Transform scenes for StateCultureSelector
   const streetStyles = allScenes.filter(scene => scene.type === 'street').map(scene => ({
@@ -235,7 +306,7 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     <div className={`fixed inset-0 z-20 pointer-events-none font-belleza transition-opacity duration-300 ${isHudVisible ? 'opacity-100' : 'opacity-0'}`} data-hud>
       {/* Top Header */}
       <div className={`absolute left-0 right-0 bg-gradient-to-b from-black to-transparent px-6 py-4 pointer-events-auto transition-all duration-300 ease-in-out ${
-        (showLeftPanel || !isHudVisible) ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
+        (showLeftPanel || showThemePanel || !isHudVisible) ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
       }`}>
         <StaticHeader />
 
@@ -246,6 +317,7 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
             onClick={() => {
               setSelectedScene(null); // Reset selected scene to pick a new one of the new type
               setSelectedSceneType(selectedSceneType === 'home' ? 'street' : 'home');
+              setShowThemePanel(false); // Close theme panel when switching view types
             }}
           >
             {selectedSceneType === 'home' ? <>
@@ -262,7 +334,7 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
       {/* Room Navigation */}
       {selectedSceneType === 'home' && (
         <div className={`transition-all duration-300 ease-in-out ${
-          showLeftPanel ? 'opacity-0 -translate-y-4' : 'opacity-100 translate-y-0'
+          showLeftPanel || showThemePanel ? 'opacity-0 -translate-y-4' : 'opacity-100 translate-y-0'
         }`}>
           <RoomNavigation
             rooms={rooms}
@@ -276,13 +348,20 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
       <HomeStyleSelector
         styles={homeStyles}
         selectedStyle={selectedScene?.id || ''}
-        onStyleSelect={(sceneId) => {
-          const scene = allScenes.find(s => s.id === sceneId);
-          if (scene) handleHomeSceneSelect(scene);
-        }}
+        onStyleSelect={handleHomeStyleSelect}
         showLeftPanel={showLeftPanel}
         onTogglePanel={() => setShowLeftPanel(!showLeftPanel)}
         disablePointerEvents={!isHudVisible}
+      />
+
+      <ThemeSelector
+        themes={availableThemes}
+        selectedTheme={selectedScene?.id || ''}
+        onThemeSelect={handleThemeSelect}
+        showPanel={showThemePanel}
+        onTogglePanel={() => setShowThemePanel(false)}
+        disablePointerEvents={!isHudVisible}
+        styleName={selectedStyleName}
       />
 
       {/* Bottom Navigation */}
@@ -291,7 +370,7 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
       {/* Style Selector Bar */}
       {selectedSceneType === 'street' && (
         <div className={`absolute bottom-0 left-0 right-0 transition-all duration-300 ease-in-out w-full ${
-          showLeftPanel ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
+          showLeftPanel || showThemePanel ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
         }`}>
           <StateCultureSelector
             styles={streetStyles}

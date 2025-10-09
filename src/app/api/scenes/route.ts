@@ -78,12 +78,12 @@ export async function GET(request: NextRequest) {
           theme_icon: row.t_image,
           theme_info: row.t_id ? {
             id: row.t_id,
-            theme_type: row.theme_type,
+            themeType: row.theme_type,
             name: row.t_name,
             image: row.t_image,
             metadata: row.metadata,
-            created_at: row.t_created_at,
-            updated_at: row.t_updated_at
+            createdAt: row.t_created_at,
+            updatedAt: row.t_updated_at
           } : null,
           created_at: row.created_at,
           updated_at: row.updated_at,
