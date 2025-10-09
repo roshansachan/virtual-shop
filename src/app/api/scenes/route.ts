@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     const sceneType = searchParams.get('sceneType');
 
     // Build query with optional type filter
-    let queryText = `SELECT s.id, s.name, s.type, s.image, s.theme_id, s.created_at, s.updated_at, sp.id as space_id, sp.name as space_name, sp.image as space_image, t.image as theme_icon
+    let queryText = `SELECT s.id, s.name, s.type, s.image, s.theme_id, s.created_at, s.updated_at, sp.id as space_id, sp.name as space_name, sp.image as space_image, t.id as t_id, t.theme_type, t.name as t_name, t.image as t_image, t.metadata, t.created_at as t_created_at, t.updated_at as t_updated_at
        FROM scenes s
        LEFT JOIN spaces sp ON sp.scene_id = s.id
        LEFT JOIN themes t ON s.theme_id = t.id`;
@@ -75,7 +75,16 @@ export async function GET(request: NextRequest) {
           type: row.type,
           image: row.image,
           theme_id: row.theme_id,
-          theme_icon: row.theme_icon,
+          theme_icon: row.t_image,
+          theme_info: row.t_id ? {
+            id: row.t_id,
+            theme_type: row.theme_type,
+            name: row.t_name,
+            image: row.t_image,
+            metadata: row.metadata,
+            created_at: row.t_created_at,
+            updated_at: row.t_updated_at
+          } : null,
           created_at: row.created_at,
           updated_at: row.updated_at,
           spaces: []
@@ -102,6 +111,7 @@ export async function GET(request: NextRequest) {
       backgroundImageS3Key: dbScene.image || undefined,
       themeId: dbScene.theme_id,
       themeIcon: dbScene.theme_icon ? s3KeyToUrl(dbScene.theme_icon) : undefined,
+      themeInfo: dbScene.theme_info,
       dbId: dbScene.id.toString(),
       spaces: dbScene.spaces
     }));
@@ -146,6 +156,7 @@ export async function POST(request: NextRequest) {
       backgroundImageS3Key: dbScene.image || undefined,
       theme_id: dbScene.theme_id,
       themeIcon: undefined, // Will be populated on GET requests
+      themeInfo: null, // Will be populated on GET requests
       dbId: dbScene.id.toString(),
       spaces: []
     };
@@ -221,6 +232,7 @@ export async function PUT(request: NextRequest) {
       backgroundImageS3Key: dbScene.image || undefined,
       theme_id: dbScene.theme_id,
       themeIcon: undefined, // Will be populated on GET requests
+      themeInfo: null, // Will be populated on GET requests
       dbId: dbScene.id.toString(),
       spaces: []
     };
