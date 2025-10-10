@@ -211,7 +211,10 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
           top: `${hotspotY - 12}px`,
           ...(shouldTransition && { transition: `left ${TRANSITION_STYLE}, top ${TRANSITION_STYLE}` })
         }}
-        onClick={() => handleHotspotClick(placement)}
+        onClick={(e) => {
+          e.stopPropagation()
+          handleHotspotClick(placement)
+        }}
       >
         <div
           className="absolute pointer-events-none"
@@ -365,7 +368,24 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
   const handleHotspotClick = async (placement: Placement) => {
     console.log('Hotspot clicked for placement:', placement.name, 'with art_story_id:', placement.art_story_id);
     
-    // Open drawer immediately
+    // If drawer is already open and this is a different placement, just switch to it
+    if (showDrawer && selectedPlacement && selectedPlacement.id !== placement.id) {
+      setSelectedPlacement(placement)
+      
+      // Fetch art stories asynchronously if the placement has an art_story_id
+      if (placement.art_story_id) {
+        fetchArtStoriesForPlacement(placement.art_story_id);
+      } else {
+        console.log('No art_story_id found for this placement');
+        setArtStoryData(null);
+      }
+
+      // Scroll the clicked product into view
+      scrollToProduct(placement, true) // true = drawer will remain open
+      return
+    }
+    
+    // Open drawer for new placement
     setSelectedPlacement(placement)
     setShowDrawer(true)
     
@@ -681,7 +701,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
       {/* Horizontal scroll container */}
       <div 
         ref={scrollContainerRef}
-        className={`w-full h-full hide-scrollbars ${showDrawer ? 'overflow-hidden pointer-events-none' : 'overflow-auto'}`}
+        className={`w-full h-full hide-scrollbars ${showDrawer ? 'overflow-hidden' : 'overflow-auto'}`}
         style={{
           scrollBehavior: 'smooth',
           WebkitOverflowScrolling: 'touch',
@@ -689,6 +709,11 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
           scrollSnapType: 'x proximity',
           ...(showDrawer && { height: '70vh' }),
           ...(shouldTransition && { transition: `height ${TRANSITION_STYLE}` })
+        }}
+        onClick={() => {
+          if (showDrawer) {
+            closeDrawer()
+          }
         }}
       >
         <div 
