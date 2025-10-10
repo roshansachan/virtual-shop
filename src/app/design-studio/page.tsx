@@ -375,6 +375,39 @@ function DesignStudioContent() {
     }
   }, [loadThemes]);
 
+  // Update theme via API
+  const handleUpdateTheme = useCallback(async (id: number, name: string, themeType: ThemeTypeValue | null, image?: string) => {
+    try {
+      const response = await fetch(`/api/themes/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name,
+          theme_type: themeType,
+          image: image || null,
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          // Refresh themes list
+          await loadThemes();
+        } else {
+          alert(`Failed to update theme: ${result.error}`);
+        }
+      } else {
+        const result = await response.json().catch(() => ({ error: 'Unknown error' }));
+        alert(`Failed to update theme: ${result.error || 'Server error'}`);
+      }
+    } catch (error) {
+      console.error('Error updating theme:', error);
+      alert('Failed to update theme. Please try again.');
+    }
+  }, [loadThemes]);
+
   // File input refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
@@ -2180,6 +2213,7 @@ function DesignStudioContent() {
         onClose={() => setShowThemeManagement(false)}
         themes={themes}
         onCreateTheme={handleCreateTheme}
+        onUpdateTheme={handleUpdateTheme}
         onDeleteTheme={handleDeleteTheme}
       />
 

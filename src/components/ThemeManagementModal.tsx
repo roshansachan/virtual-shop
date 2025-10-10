@@ -9,6 +9,7 @@ interface ThemeManagementModalProps {
   onClose: () => void;
   themes: Theme[];
   onCreateTheme: (name: string, themeType: ThemeTypeValue | null, image?: string) => void;
+  onUpdateTheme: (id: number, name: string, themeType: ThemeTypeValue | null, image?: string) => void;
   onDeleteTheme: (id: number) => void;
 }
 
@@ -17,9 +18,11 @@ export default function ThemeManagementModal({
   onClose,
   themes,
   onCreateTheme,
+  onUpdateTheme,
   onDeleteTheme
 }: ThemeManagementModalProps) {
   const [showCreateTheme, setShowCreateTheme] = useState(false);
+  const [editingTheme, setEditingTheme] = useState<Theme | null>(null);
   const [newThemeName, setNewThemeName] = useState('');
   const [selectedThemeType, setSelectedThemeType] = useState<ThemeTypeValue | null>(ThemeType.CITY);
   const [themeImage, setThemeImage] = useState<string>(''); // For display purposes
@@ -36,24 +39,38 @@ export default function ThemeManagementModal({
 
   const handleCreateTheme = () => {
     if (newThemeName.trim()) {
-      // Pass the S3 key instead of the full URL
-      onCreateTheme(newThemeName.trim(), selectedThemeType, themeImageKey || undefined);
-      setShowCreateTheme(false);
-      setNewThemeName('');
-      setSelectedThemeType(ThemeType.CITY);
-      setThemeImage('');
-      setThemeImageKey('');
-      setUploadProgress(0);
+      if (editingTheme) {
+        // Update existing theme
+        onUpdateTheme(editingTheme.id, newThemeName.trim(), selectedThemeType, themeImageKey || undefined);
+      } else {
+        // Create new theme
+        onCreateTheme(newThemeName.trim(), selectedThemeType, themeImageKey || undefined);
+      }
+      resetForm();
     }
   };
 
-  const cancelCreateTheme = () => {
+  const resetForm = () => {
     setShowCreateTheme(false);
+    setEditingTheme(null);
     setNewThemeName('');
     setSelectedThemeType(ThemeType.CITY);
     setThemeImage('');
     setThemeImageKey('');
     setUploadProgress(0);
+  };
+
+  const handleEditTheme = (theme: Theme) => {
+    setEditingTheme(theme);
+    setNewThemeName(theme.name);
+    setSelectedThemeType(theme.theme_type);
+    setThemeImage(theme.image || '');
+    setThemeImageKey(''); // Will be set when new image is uploaded
+    setShowCreateTheme(true);
+  };
+
+  const cancelCreateTheme = () => {
+    resetForm();
   };
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -150,15 +167,19 @@ export default function ThemeManagementModal({
               <h3 className="text-lg font-medium text-gray-900">Themes</h3>
               <button
                 onClick={() => setShowCreateTheme(true)}
-                className="px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700"
+                disabled={showCreateTheme}
+                className="px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700 disabled:opacity-50"
               >
                 Add Theme
               </button>
             </div>
 
-            {/* Create Theme Form */}
+            {/* Create/Edit Theme Form */}
             {showCreateTheme && (
               <div className="border border-gray-300 rounded-lg p-4 bg-gray-50 mb-4">
+                <h4 className="text-md font-medium text-gray-900 mb-3">
+                  {editingTheme ? 'Edit Theme' : 'Create New Theme'}
+                </h4>
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
                         <div>
@@ -249,7 +270,7 @@ export default function ThemeManagementModal({
                       disabled={!newThemeName.trim()}
                       className="px-3 py-2 bg-green-600 text-white rounded text-sm hover:bg-green-700 disabled:opacity-50"
                     >
-                      Create
+                      {editingTheme ? 'Update' : 'Create'}
                     </button>
                     <button
                       onClick={cancelCreateTheme}
@@ -292,8 +313,16 @@ export default function ThemeManagementModal({
                     </div>
                     <div className="flex gap-2">
                       <button 
+                        onClick={() => handleEditTheme(theme)}
+                        disabled={showCreateTheme}
+                        className="text-blue-600 hover:text-blue-800 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Edit
+                      </button>
+                      <button 
                         onClick={() => onDeleteTheme(theme.id)}
-                        className="text-red-600 hover:text-red-800 text-sm"
+                        disabled={showCreateTheme}
+                        className="text-red-600 hover:text-red-800 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Delete
                       </button>
