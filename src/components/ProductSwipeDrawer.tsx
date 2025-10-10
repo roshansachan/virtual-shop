@@ -63,9 +63,20 @@ export default function ProductSwipeDrawer({
   // Scroll timeout ref for cleanup
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   
+  // Screen height state for responsive width
+  const [screenHeight, setScreenHeight] = useState<number>(0)
+  
   // Delete confirmation state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<{ type: 'placement' | 'product', id: string, name: string } | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // Update screen height on mount and resize
+  useEffect(() => {
+    const updateScreenHeight = () => setScreenHeight(window.innerHeight)
+    updateScreenHeight()
+    window.addEventListener('resize', updateScreenHeight)
+    return () => window.removeEventListener('resize', updateScreenHeight)
+  }, [])
   
   // Handle delete placement
   const handleDeletePlacement = useCallback(async () => {
@@ -332,7 +343,7 @@ export default function ProductSwipeDrawer({
       onClick={onClose}
     >
       <div
-        className="bg-black w-full shadow-lg max-h-[34vh] h-[34vh] flex flex-col"
+        className="bg-black w-full shadow-lg max-h-[30vh] h-fit flex flex-col justify-start"
         style={{ 
           transform: isVisible ? 'translateY(0px)' : 'translateY(100%)', 
           transition: 'transform 0.3s ease-out'
@@ -391,7 +402,13 @@ export default function ProductSwipeDrawer({
               </button>
             </div>
             <div className="flex flex-col">
-              <h3 className="text-xl text-white font-normal leading-tight" style={{ fontFamily: 'Belleza', letterSpacing: '-0.02em' }}>
+              <h3 className="text-xl text-white font-normal leading-tight overflow-hidden" style={{
+                fontFamily: 'Belleza',
+                letterSpacing: '-0.02em',
+                display: '-webkit-box',
+                WebkitLineClamp: 1,
+                WebkitBoxOrient: 'vertical',
+              }}>
                 {placement.name}
               </h3>
               <p className="text-xs text-[#FFEC8E] font-normal leading-tight" style={{ fontFamily: 'Belleza', letterSpacing: '-0.02em' }}>
@@ -410,31 +427,22 @@ export default function ProductSwipeDrawer({
         </div>
 
         {/* Snap Scrolling Image Gallery */}
-        <div className="flex-1 overflow-hidden pb-5">
-          <div ref={scrollContainerRef} className="h-full overflow-x-auto overflow-y-hidden snap-x snap-mandatory snap-smooth hide-scrollbars accelerated-scroll">
-            <div className="flex h-[26vh]">
+        <div className="flex-1 overflow-hidden">
+          <div ref={scrollContainerRef} className="overflow-x-auto overflow-y-hidden snap-x snap-mandatory snap-smooth hide-scrollbars accelerated-scroll">
+            <div className="flex">
               {/* Left padding slide */}
-              <div className="flex-shrink-0 flex flex-col items-center justify-center px-4 pt-4 opacity-0" style={{ width: '70%' }}>
+              <div className="h-fit flex-shrink-0 flex items-center justify-center p-4 opacity-0" style={{ width: screenHeight > 0 && screenHeight < 700 ? '50%' : '70%' }}>
                 <div className="w-full max-w-sm invisible">
-                  <div className="aspect-[16/11] relative bg-transparent rounded-2xl overflow-hidden mb-3"></div>
-                  <div className="text-left mb-3 invisible">
-                    <div className="h-6 bg-transparent mb-1"></div>
-                    <div className="h-6 bg-transparent w-24"></div>
-                  </div>
-                  <div className="flex gap-2 sm:gap-3 invisible">
-                    <div className="flex-1 min-w-0 h-8 px-2 sm:px-2.5 py-1 bg-transparent rounded-xs"></div>
-                    <div className="flex-1 min-w-0 h-8 px-2 sm:px-2.5 py-1 bg-transparent rounded-xs"></div>
-                    <div className="flex-1 min-w-0 h-8 px-2 sm:px-2.5 py-1 bg-transparent rounded-xs"></div>
-                  </div>
+                  <div className="aspect-[3/2] relative bg-transparent rounded-2xl overflow-hidden mb-3"></div>
                 </div>
               </div>
               
               {placement.products.map((product) => (
-                <div key={product.id} data-product-id={product.id} className="image-container product-card flex-shrink-0 snap-center flex flex-col items-center justify-start px-4 pt-6" style={{ width: '70%' }}>
+                <div key={product.id} data-product-id={product.id} className={`image-container product-card h-fit flex-shrink-0 snap-center flex items-center justify-center p-4 ${screenHeight > 0 && screenHeight < 700 ? 'w-[50%]' : 'w-[65%]'}`}>
                   <div className="w-full max-w-sm">
                     <div className="relative image-aspect">
                       {/* Product Image - Landscape aspect ratio */}
-                      <div className="aspect-[16/9] relative bg-gray-200 rounded-2xl overflow-hidden mb-3">
+                      <div className="aspect-[3/2] relative bg-gray-200 rounded-2xl overflow-hidden mb-3">
                         {product.src ? (
                           <Image
                             src={product?.productInfo?.productImage || product.src} // Fallback to src if productImage is not available
@@ -466,7 +474,7 @@ export default function ProductSwipeDrawer({
                         <div className="text-left mb-2">
                           <h4 className="text-white text-base font-normal leading-tight mb-1 overflow-hidden" style={{
                             display: '-webkit-box',
-                            WebkitLineClamp: 2,
+                            WebkitLineClamp: 1,
                             WebkitBoxOrient: 'vertical',
                             lineHeight: '1.3'
                           }}>
@@ -535,18 +543,9 @@ export default function ProductSwipeDrawer({
               ))}
               
               {/* Right padding slide */}
-              <div className="flex-shrink-0 flex flex-col items-center justify-center px-4 pt-4 opacity-0" style={{ width: '70%' }}>
+              <div className="h-fit flex-shrink-0 flex items-center justify-center p-4 opacity-0" style={{ width: screenHeight > 0 && screenHeight < 700 ? '50%' : '70%' }}>
                 <div className="w-full max-w-sm invisible">
-                  <div className="aspect-[16/11] relative bg-transparent rounded-2xl overflow-hidden mb-3"></div>
-                  <div className="text-left mb-3 invisible">
-                    <div className="h-6 bg-transparent mb-1"></div>
-                    <div className="h-6 bg-transparent w-24"></div>
-                  </div>
-                  <div className="flex gap-2 sm:gap-3 invisible">
-                    <div className="flex-1 min-w-0 h-8 px-2 sm:px-2.5 py-1 bg-transparent rounded-xs"></div>
-                    <div className="flex-1 min-w-0 h-8 px-2 sm:px-2.5 py-1 bg-transparent rounded-xs"></div>
-                    <div className="flex-1 min-w-0 h-8 px-2 sm:px-2.5 py-1 bg-transparent rounded-xs"></div>
-                  </div>
+                  <div className="aspect-[3/2] relative bg-transparent rounded-2xl overflow-hidden mb-3"></div>
                 </div>
               </div>
             </div>

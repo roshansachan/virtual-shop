@@ -334,7 +334,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
         const container = scrollContainerRef.current
         
         // Calculate the scale that will be used after the transition
-        const targetAvailableHeight = drawerWillBeOpen ? window.innerHeight * 0.66 : undefined
+        const targetAvailableHeight = drawerWillBeOpen ? window.innerHeight * 0.70 : undefined
         const targetScale = calculateScale(
           space.backgroundImageSize.width,
           space.backgroundImageSize.height,
@@ -491,7 +491,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
     if (!space || !space.backgroundImageSize) return
 
     const updateScale = () => {
-      const availableHeight = showDrawer ? window.innerHeight * 0.66 : undefined
+      const availableHeight = showDrawer ? window.innerHeight * 0.70 : undefined
       const newScale = calculateScale(
         space.backgroundImageSize!.width,
         space.backgroundImageSize!.height,
@@ -687,7 +687,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
           WebkitOverflowScrolling: 'touch',
           overscrollBehavior: 'none',
           scrollSnapType: 'x proximity',
-          ...(showDrawer && { height: '66vh' }),
+          ...(showDrawer && { height: '70vh' }),
           ...(shouldTransition && { transition: `height ${TRANSITION_STYLE}` })
         }}
       >
