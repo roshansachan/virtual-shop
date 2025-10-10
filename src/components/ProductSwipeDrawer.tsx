@@ -343,17 +343,15 @@ export default function ProductSwipeDrawer({
         }
       `}</style>
     <div
-      className={`fixed inset-0 bg-transparent z-30 flex items-end font-belleza transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
+      className={`fixed inset-0 bg-transparent z-30 flex items-end font-belleza transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'} pointer-events-none`}
       data-drawer="true"
-      onClick={onClose}
     >
       <div
-        className="bg-black w-full shadow-lg h-[30vh] flex flex-col justify-between"
+        className="bg-black w-full shadow-lg h-[30vh] flex flex-col justify-between pointer-events-auto"
         style={{ 
           transform: isVisible ? 'translateY(0px)' : 'translateY(100%)', 
           transition: 'transform 0.3s ease-out'
         }}
-        onClick={(e) => e.stopPropagation()}
       >
 
         {/* Drawer Header */}
