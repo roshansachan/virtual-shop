@@ -33,9 +33,10 @@ interface Placement {
 interface SpaceRendererProps {
   spaceId: string | null;
   hideIndicators?: boolean
+  onDrawerStateChange?: (isOpen: boolean) => void;
 }
 
-export default function SpaceRenderer({ spaceId, hideIndicators = false }: SpaceRendererProps) {
+export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawerStateChange }: SpaceRendererProps) {
   const [space, setSpace] = useState<SpaceConfig | null>(null)
   const [scale, setScale] = useState(1)
   const [loading, setLoading] = useState(true)
@@ -642,9 +643,10 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false }: Space
       setShouldTransition(true)
       // Reset transition flag after animation completes
       setTimeout(() => setShouldTransition(false), 350)
+      onDrawerStateChange?.(showDrawer);
     }
     prevShowDrawerRef.current = showDrawer
-  }, [showDrawer])
+  }, [showDrawer, onDrawerStateChange])
 
   if (loading) {
     return (

@@ -14,6 +14,7 @@ interface HomeContentProps {
 function HomeContent({ selectedSpace, handleSelectedSpaceChange }: HomeContentProps) {
   // const searchParams = useSearchParams();
   // const spaceIdParam = searchParams.get('spaceId');
+  const [isProductDrawerOpen, setIsProductDrawerOpen] = useState(false);
 
   // Handle dynamic viewport height for mobile browsers
   useEffect(() => {
@@ -35,16 +36,22 @@ function HomeContent({ selectedSpace, handleSelectedSpaceChange }: HomeContentPr
     }
   }, [])
 
+  const handleDrawerStateChange = useCallback((isOpen: boolean) => {
+    setIsProductDrawerOpen(isOpen);
+  }, []);
+
   return (
     <div className="relative w-full" style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
       <SpaceRenderer 
         hideIndicators
         spaceId={selectedSpace}
+        onDrawerStateChange={handleDrawerStateChange}
       />
 
       <StaticHUD 
         selectedSpace={selectedSpace}
         onSelectedSpaceChange={handleSelectedSpaceChange}
+        isProductDrawerOpen={isProductDrawerOpen}
       />
       
       {/* Design Studio link */}
