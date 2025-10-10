@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import Image from 'next/image'
 import type { Placement, Product } from '../types'
+import closeIcon from '@/assets/close-icon.svg'
 
 // Throttle utility function for better scroll performance
 function throttle<T extends (...args: any[]) => any>(
@@ -424,9 +425,13 @@ export default function ProductSwipeDrawer({
             onClick={onClose}
             className="text-white/60 hover:text-white transition-colors"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <Image
+              src={closeIcon}
+              alt="Close"
+              width={10}
+              height={10}
+              className="w-2.5 h-2.5"
+            />
           </button>
         </div>
 
@@ -435,14 +440,14 @@ export default function ProductSwipeDrawer({
           <div ref={scrollContainerRef} className="overflow-x-auto overflow-y-hidden snap-x snap-mandatory snap-smooth hide-scrollbars accelerated-scroll">
             <div className="flex">
               {/* Left padding slide */}
-              <div className="h-fit flex-shrink-0 flex items-center justify-center p-4 opacity-0" style={{ width: screenWidth > 0 && (screenHeight / screenWidth) < 2 ? '50%' : '65%' }}>
+              <div className="h-fit flex-shrink-0 flex items-center justify-center py-4 px-3 opacity-0" style={{ width: screenWidth > 0 && (screenHeight / screenWidth) < 2 ? '50%' : '65%' }}>
                 <div className="w-full max-w-sm invisible">
                   <div className="aspect-[3/2] relative bg-transparent rounded-2xl overflow-hidden mb-3"></div>
                 </div>
               </div>
               
               {placement.products.map((product) => (
-                <div key={product.id} data-product-id={product.id} className={`image-container product-card h-fit flex-shrink-0 snap-center flex items-center justify-center p-4 ${screenWidth > 0 && (screenHeight / screenWidth) < 2 ? 'w-[50%]' : 'w-[65%]'}`}>
+                <div key={product.id} data-product-id={product.id} className={`image-container product-card h-fit flex-shrink-0 snap-center flex items-center justify-center py-4 px-3 ${screenWidth > 0 && (screenHeight / screenWidth) < 2 ? 'w-[50%]' : 'w-[65%]'}`}>
                   <div className="w-full max-w-sm">
                     <div className="relative image-aspect">
                       {/* Product Image - Landscape aspect ratio */}
@@ -547,7 +552,7 @@ export default function ProductSwipeDrawer({
               ))}
               
               {/* Right padding slide */}
-              <div className="h-fit flex-shrink-0 flex items-center justify-center p-4 opacity-0" style={{ width: screenWidth > 0 && (screenHeight / screenWidth) < 2 ? '50%' : '65%' }}>
+              <div className="h-fit flex-shrink-0 flex items-center justify-center py-4 px-3 opacity-0" style={{ width: screenWidth > 0 && (screenHeight / screenWidth) < 2 ? '50%' : '65%' }}>
                 <div className="w-full max-w-sm invisible">
                   <div className="aspect-[3/2] relative bg-transparent rounded-2xl overflow-hidden mb-3"></div>
                 </div>
