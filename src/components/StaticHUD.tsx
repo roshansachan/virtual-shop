@@ -12,6 +12,7 @@ interface StaticHUDProps {
   onClose?: () => void;
   selectedSpace?: string | null;
   onSelectedSpaceChange?: (spaceId: string | null) => void;
+  isProductDrawerOpen?: boolean;
 }
 
 interface Scene {
@@ -57,7 +58,7 @@ const HomeIcon = () => (
   </svg>
 );
 
-const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceChange }) => {
+const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceChange, isProductDrawerOpen = false }) => {
   const searchParams = useSearchParams();
   const [selectedSceneType, setSelectedSceneType] = useState<'home' | 'street'>(() => {
     const sceneType = searchParams.get('sceneType');
@@ -93,8 +94,8 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
   }, []);
 
   const handleClick = useCallback(() => {
-    if (showLeftPanel || showThemePanel) {
-      // Don't hide HUD when left panel or theme panel is open
+    if (showLeftPanel || showThemePanel || isProductDrawerOpen) {
+      // Don't hide HUD when left panel, theme panel, or product drawer is open
       return;
     }
     if (isHudVisible) {
@@ -108,7 +109,7 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
       // If HUD is hidden, show it and start the timer
       showHud();
     }
-  }, [isHudVisible, showHud, showLeftPanel, showThemePanel]);
+  }, [isHudVisible, showHud, showLeftPanel, showThemePanel, isProductDrawerOpen]);
 
   // Set up idle timer on mount
   useEffect(() => {
@@ -121,19 +122,28 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     };
   }, [showHud]);
 
-  // Manage idle timer based on showLeftPanel and showThemePanel
+  // Handle HUD visibility based on product drawer state
   useEffect(() => {
-    if (showLeftPanel || showThemePanel) {
-      // Clear the timer when either panel is open
+    if (isProductDrawerOpen) {
+      setIsHudVisible(false);
+    } else {
+      setIsHudVisible(true);
+    }
+  }, [isProductDrawerOpen]);
+
+  // Manage idle timer based on showLeftPanel, showThemePanel, and isProductDrawerOpen
+  useEffect(() => {
+    if (showLeftPanel || showThemePanel || isProductDrawerOpen) {
+      // Clear the timer when either panel or product drawer is open
       if (idleTimerRef.current) {
         clearTimeout(idleTimerRef.current);
         idleTimerRef.current = null;
       }
     } else if (isHudVisible) {
-      // Restart the timer when panels are closed and HUD is visible
+      // Restart the timer when panels/drawer are closed and HUD is visible
       showHud();
     }
-  }, [showLeftPanel, showThemePanel, isHudVisible, showHud]);
+  }, [showLeftPanel, showThemePanel, isProductDrawerOpen, isHudVisible, showHud]);
 
   // Set up click event listeners
   useEffect(() => {
