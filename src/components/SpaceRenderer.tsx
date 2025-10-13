@@ -19,6 +19,13 @@ interface ProductImage {
   height: number
   x: number
   y: number
+  productInfo?: {
+    productId: string
+    productName: string
+    originalPrice: string
+    discountPercentage: string
+    productImage: string
+  } | null
 }
 
 interface Placement {
@@ -53,17 +60,20 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
   const prevShowDrawerRef = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const preloadedImagesRef = useRef<Map<string, HTMLImageElement>>(new Map())
 
   // Common transition style for easy customization
   const TRANSITION_STYLE = '0.5s ease-out'
 
   /**
-   * Gets the actual dimensions of an image by loading it
+   * Gets the actual dimensions of an image by loading it and keeps it preloaded
    */
   const getImageDimensions = useCallback((src: string): Promise<{ width: number; height: number }> => {
     return new Promise((resolve, reject) => {
       const img = document.createElement('img')
       img.onload = () => {
+        // Store the loaded image to keep it cached
+        preloadedImagesRef.current.set(src, img)
         resolve({ width: img.naturalWidth, height: img.naturalHeight })
       }
       img.onerror = reject
@@ -72,7 +82,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
   }, [])
 
   /**
-   * Gets actual dimensions for all product images in placements
+   * Gets actual dimensions for all product images in placements and preloads them
    */
   const getAllProductDimensions = useCallback(async (placements: Placement[]): Promise<void> => {
     const dimensionPromises = placements.flatMap(placement =>
@@ -85,6 +95,16 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
         } catch (error) {
           console.error(`Failed to get dimensions for ${product.name}:`, error)
           // Keep existing dimensions if loading fails
+        }
+
+        // Also preload the productInfo.productImage if it exists
+        if (product.productInfo?.productImage) {
+          try {
+            await getImageDimensions(product.productInfo.productImage)
+            console.log(`Preloaded productInfo image for ${product.name}`)
+          } catch (error) {
+            console.error(`Failed to preload productInfo image for ${product.name}:`, error)
+          }
         }
       })
     )
@@ -300,7 +320,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
       console.error('Error deleting placement:', error);
       throw error;
     }
-  }, [spaceId]);
+  }, [spaceId, loadSpace]);
 
   /**
    * Handles deletion of a product/placement image
@@ -326,7 +346,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
       console.error('Error deleting product:', error);
       throw error;
     }
-  }, [spaceId]);
+  }, [spaceId, loadSpace]);
 
   /**
    * Scrolls the container to center the visible product from a placement after scaling transition
@@ -506,6 +526,11 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
   useEffect(() => {
     loadSpace()
   }, [spaceId, loadSpace])
+
+  // Clear preloaded images when space changes
+  useEffect(() => {
+    preloadedImagesRef.current.clear()
+  }, [spaceId])
 
   // Update scaling when space loads or window resizes
   useEffect(() => {
