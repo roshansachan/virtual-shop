@@ -7,6 +7,7 @@ import { captureCanvasForFullscreen } from '@/lib/fullscreen-utils'
 import ProductSwipeDrawer from './ProductSwipeDrawer'
 import StoriesModal from './StoriesModal'
 import type { SpaceConfig } from '@/types/index'
+import fullScreenIcon from '@/assets/fullscreen-icon.svg'
 
 // Types for the space-based configuration
 interface ProductImage {
@@ -829,22 +830,10 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
       {!isNativeFullscreen && (
         <button
           onClick={handleFullscreen}
-          className="fixed bottom-6 right-6 z-50 bg-black/80 hover:bg-black text-white p-3 rounded-full shadow-lg transition-all duration-200 hover:scale-110 active:scale-95"
+          className="fixed bottom-6 right-6 z-20 hover:bg-black text-white transition-all duration-200 hover:scale-110 active:scale-95"
           title="View in fullscreen"
         >
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
-            />
-          </svg>
+          <Image src={fullScreenIcon} alt="Fullscreen Icon" className="w-6 h-6" />
         </button>
       )}
 
