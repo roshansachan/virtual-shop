@@ -405,7 +405,7 @@ export default function ProductSwipeDrawer({
               </button>
             </div>
             <div className="flex flex-col">
-              <h3 className="text-xl text-white font-normal leading-tight overflow-hidden" style={{
+              <h3 className="text-base text-white font-normal leading-tight overflow-hidden" style={{
                 fontFamily: 'Belleza',
                 letterSpacing: '-0.02em',
                 display: '-webkit-box',
@@ -414,7 +414,7 @@ export default function ProductSwipeDrawer({
               }}>
                 {placement.name}
               </h3>
-              <p className="text-xs text-[#FFEC8E] font-normal leading-tight" style={{ fontFamily: 'Belleza', letterSpacing: '-0.02em' }}>
+              <p className="text-[10px] text-[#FFEC8E] font-normal leading-tight" style={{ fontFamily: 'Belleza', letterSpacing: '-0.02em' }}>
                 {artStoryLoading ? 'Loading story...' : 'Unfold The Story→'}
               </p>
             </div>
@@ -474,8 +474,10 @@ export default function ProductSwipeDrawer({
                           </div>
                         )}
                       </div>
+
+                      <div className="absolute bottom-0 left-0 w-full h-[101px] bg-gradient-to-b from-black/0 to-black/80" />
                       
-                      <div className="absolute bottom-3 left-3">
+                      <div className="absolute bottom-3 left-3 right-3">
                         {/* Product Details */}
                         <div className="text-left mb-2">
                           <h4 className="text-white text-sm font-normal leading-tight mb-1 overflow-hidden" style={{
