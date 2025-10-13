@@ -729,7 +729,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
       {/* Horizontal scroll container */}
       <div 
         ref={scrollContainerRef}
-        className={`w-full h-full hide-scrollbars ${showDrawer ? 'overflow-hidden' : 'overflow-auto'}`}
+        className="w-full h-full hide-scrollbars overflow-auto"
         style={{
           scrollBehavior: 'smooth',
           WebkitOverflowScrolling: 'touch',
