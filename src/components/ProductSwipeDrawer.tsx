@@ -451,11 +451,10 @@ export default function ProductSwipeDrawer({
                       {/* Product Image - Landscape aspect ratio */}
                       <div className="aspect-[3/2] relative bg-gray-200 rounded-2xl overflow-hidden mb-3">
                         {product.src ? (
-                          <Image
+                          <img
                             src={product?.productInfo?.productImage || product.src} // Fallback to src if productImage is not available
                             alt={product.name}
-                            fill
-                            className="object-cover"
+                            className="absolute inset-0 w-full h-full object-cover"
                             onError={(e) => {
                               // Fallback to grey placeholder on error
                               const target = e.target as HTMLImageElement
