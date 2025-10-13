@@ -74,11 +74,10 @@ const HomeStyleSelector: React.FC<HomeStyleSelectorProps> = ({ styles, selectedS
                 onClick={() => onStyleSelect(style.id)}
               >
                 <div className="aspect-[174/104] relative">
-                  <Image
+                  <img
                     src={style.image}
                     alt={style.name}
-                    fill
-                    className="object-cover"
+                    className="absolute inset-0 w-full h-full object-cover"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
                   <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2">
