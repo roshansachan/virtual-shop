@@ -114,6 +114,19 @@ export default function ProductSwipeDrawer({
     }
   }, [showDeleteConfirm, onDeleteProduct])
 
+  // Handle clicking on a product slide to make it active
+  const handleProductClick = useCallback((product: Product, element: HTMLElement) => {
+    const scrollContainer = scrollContainerRef.current
+    if (!scrollContainer) return
+
+    // Use scrollIntoView to center the clicked element in the viewport
+    element.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+      inline: 'center'
+    })
+  }, [])
+
   // Throttled scroll handler for smooth performance
   const throttledHandleScroll = useMemo(
     () => throttle(() => {
@@ -445,7 +458,12 @@ export default function ProductSwipeDrawer({
               </div>
               
               {placement.products.map((product) => (
-                <div key={product.id} data-product-id={product.id} className={`image-container product-card h-fit flex-shrink-0 snap-center flex items-center justify-center py-4 px-3 ${screenWidth > 0 && (screenHeight / screenWidth) < 2 ? 'w-[50%]' : 'w-[65%]'}`}>
+                <div 
+                  key={product.id} 
+                  data-product-id={product.id} 
+                  className={`image-container product-card h-fit flex-shrink-0 snap-center flex items-center justify-center py-4 px-3 cursor-pointer ${screenWidth > 0 && (screenHeight / screenWidth) < 2 ? 'w-[50%]' : 'w-[65%]'}`}
+                  onClick={(e) => handleProductClick(product, e.currentTarget as HTMLElement)}
+                >
                   <div className="w-full max-w-sm">
                     <div className="relative image-aspect">
                       {/* Product Image - Landscape aspect ratio */}
