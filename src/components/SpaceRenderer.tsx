@@ -729,14 +729,10 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
           }}
         >
           {/* Background Image */}
-          <Image
+          <img
             src={backgroundImage}
             alt={`${space.name} - Swipe to explore`}
-            width={scaledWidth}
-            height={scaledHeight}
             className="scene-bg-image absolute top-0 left-0 w-full h-full object-cover select-none"
-            priority
-            draggable={false}
             style={{
               touchAction: 'pan-x pan-y',
             }}
@@ -755,11 +751,9 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
             
             return (
               <React.Fragment key={`image-${image.id}`}>
-                <Image
+                <img
                   src={image.src}
                   alt={image.name}
-                  width={image.width * scale}
-                  height={image.height * scale}
                   className="scene-product-image absolute select-none"
                   style={{
                     left: `${image.x * scale}px`,
@@ -769,7 +763,6 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
                     opacity: space.type === 'street' ? 0 : 1,
                     ...(shouldTransition && { transition: `left ${TRANSITION_STYLE}, top ${TRANSITION_STYLE}, width ${TRANSITION_STYLE}, height ${TRANSITION_STYLE}` })
                   }}
-                  draggable={false}
                   onError={(e) => {
                     console.error('Failed to load placement product:', image.src)
                     e.currentTarget.style.display = 'none'
