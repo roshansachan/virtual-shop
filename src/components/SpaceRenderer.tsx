@@ -7,6 +7,7 @@ import { captureCanvasForFullscreen } from '@/lib/fullscreen-utils'
 import ProductSwipeDrawer from './ProductSwipeDrawer'
 import StoriesModal from './StoriesModal'
 import type { SpaceConfig } from '@/types/index'
+import fullScreenIcon from '@/assets/fullscreen-icon.svg'
 
 // Types for the space-based configuration
 interface ProductImage {
@@ -19,6 +20,13 @@ interface ProductImage {
   height: number
   x: number
   y: number
+  productInfo?: {
+    productId: string
+    productName: string
+    originalPrice: string
+    discountPercentage: string
+    productImage: string
+  } | null
 }
 
 interface Placement {
@@ -53,17 +61,20 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
   const prevShowDrawerRef = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const preloadedImagesRef = useRef<Map<string, HTMLImageElement>>(new Map())
 
   // Common transition style for easy customization
   const TRANSITION_STYLE = '0.5s ease-out'
 
   /**
-   * Gets the actual dimensions of an image by loading it
+   * Gets the actual dimensions of an image by loading it and keeps it preloaded
    */
   const getImageDimensions = useCallback((src: string): Promise<{ width: number; height: number }> => {
     return new Promise((resolve, reject) => {
       const img = document.createElement('img')
       img.onload = () => {
+        // Store the loaded image to keep it cached
+        preloadedImagesRef.current.set(src, img)
         resolve({ width: img.naturalWidth, height: img.naturalHeight })
       }
       img.onerror = reject
@@ -72,7 +83,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
   }, [])
 
   /**
-   * Gets actual dimensions for all product images in placements
+   * Gets actual dimensions for all product images in placements and preloads them
    */
   const getAllProductDimensions = useCallback(async (placements: Placement[]): Promise<void> => {
     const dimensionPromises = placements.flatMap(placement =>
@@ -85,6 +96,16 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
         } catch (error) {
           console.error(`Failed to get dimensions for ${product.name}:`, error)
           // Keep existing dimensions if loading fails
+        }
+
+        // Also preload the productInfo.productImage if it exists
+        if (product.productInfo?.productImage) {
+          try {
+            await getImageDimensions(product.productInfo.productImage)
+            console.log(`Preloaded productInfo image for ${product.name}`)
+          } catch (error) {
+            console.error(`Failed to preload productInfo image for ${product.name}:`, error)
+          }
         }
       })
     )
@@ -300,7 +321,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
       console.error('Error deleting placement:', error);
       throw error;
     }
-  }, [spaceId]);
+  }, [spaceId, loadSpace]);
 
   /**
    * Handles deletion of a product/placement image
@@ -326,7 +347,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
       console.error('Error deleting product:', error);
       throw error;
     }
-  }, [spaceId]);
+  }, [spaceId, loadSpace]);
 
   /**
    * Scrolls the container to center the visible product from a placement after scaling transition
@@ -506,6 +527,11 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
   useEffect(() => {
     loadSpace()
   }, [spaceId, loadSpace])
+
+  // Clear preloaded images when space changes
+  useEffect(() => {
+    preloadedImagesRef.current.clear()
+  }, [spaceId])
 
   // Update scaling when space loads or window resizes
   useEffect(() => {
@@ -703,7 +729,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
       {/* Horizontal scroll container */}
       <div 
         ref={scrollContainerRef}
-        className={`w-full h-full hide-scrollbars ${showDrawer ? 'overflow-hidden' : 'overflow-auto'}`}
+        className="w-full h-full hide-scrollbars overflow-auto"
         style={{
           scrollBehavior: 'smooth',
           WebkitOverflowScrolling: 'touch',
@@ -729,14 +755,10 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
           }}
         >
           {/* Background Image */}
-          <Image
+          <img
             src={backgroundImage}
             alt={`${space.name} - Swipe to explore`}
-            width={scaledWidth}
-            height={scaledHeight}
             className="scene-bg-image absolute top-0 left-0 w-full h-full object-cover select-none"
-            priority
-            draggable={false}
             style={{
               touchAction: 'pan-x pan-y',
             }}
@@ -755,11 +777,9 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
             
             return (
               <React.Fragment key={`image-${image.id}`}>
-                <Image
+                <img
                   src={image.src}
                   alt={image.name}
-                  width={image.width * scale}
-                  height={image.height * scale}
                   className="scene-product-image absolute select-none"
                   style={{
                     left: `${image.x * scale}px`,
@@ -769,7 +789,6 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
                     opacity: space.type === 'street' ? 0 : 1,
                     ...(shouldTransition && { transition: `left ${TRANSITION_STYLE}, top ${TRANSITION_STYLE}, width ${TRANSITION_STYLE}, height ${TRANSITION_STYLE}` })
                   }}
-                  draggable={false}
                   onError={(e) => {
                     console.error('Failed to load placement product:', image.src)
                     e.currentTarget.style.display = 'none'
@@ -811,22 +830,10 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
       {!isNativeFullscreen && (
         <button
           onClick={handleFullscreen}
-          className="fixed bottom-6 right-6 z-50 bg-black/80 hover:bg-black text-white p-3 rounded-full shadow-lg transition-all duration-200 hover:scale-110 active:scale-95"
+          className="fixed bottom-6 right-6 z-20 hover:bg-black text-white transition-all duration-200 hover:scale-110 active:scale-95"
           title="View in fullscreen"
         >
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
-            />
-          </svg>
+          <Image src={fullScreenIcon} alt="Fullscreen Icon" className="w-6 h-6" />
         </button>
       )}
 
