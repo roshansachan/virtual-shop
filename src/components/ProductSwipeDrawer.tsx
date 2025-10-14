@@ -416,7 +416,7 @@ export default function ProductSwipeDrawer({
                   )}
                 </button>
               ) : (
-                <div className="w-11 h-11 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
+                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
                   <Image
                     src="/story-icon.png"
                     alt="Story icon"
