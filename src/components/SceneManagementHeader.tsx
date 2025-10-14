@@ -52,18 +52,20 @@ export default function SceneManagementHeader({
       if (response.ok) {
         const result = await response.json();
         if (result.success) {
+          debugger
           setDbScenes(result.data || []);
           
           // Convert DBScene to Scene format
-          const convertedScenes: Scene[] = (result.data || []).map((dbScene: DBScene) => ({
+          const convertedScenes: Scene[] = (result.data || []).map((dbScene: any) => ({
             id: dbScene.id.toString(),
             name: dbScene.name,
             type: dbScene.type || undefined,
-            backgroundImage: dbScene.image || '',
-            backgroundImageSize: { width: 1920, height: 1080 }, // Default size, should be stored in DB
+            backgroundImage: dbScene.backgroundImage || '',
+            backgroundImageSize: dbScene.backgroundImageSize || { width: 1920, height: 1080 },
             spaces: [], // Empty for now, will be loaded separately if needed
-            backgroundImageS3Key: dbScene.image || undefined,
-            theme_id: dbScene.theme_id,
+            backgroundImageS3Key: dbScene.backgroundImageS3Key || undefined,
+            themeId: dbScene.themeId,
+            themeInfo: dbScene.themeInfo,
             dbId: dbScene.id.toString()
           }));
           
@@ -137,20 +139,22 @@ export default function SceneManagementHeader({
     }
   }, [dbScenes, onSceneDelete]); // Removed loadScenesFromDatabase since it's stable
 
+  debugger;
   // Combined scenes list (filesystem + database)
   const allScenes = [
     ...scenes,
     // Add database scenes that aren't in filesystem scenes
     ...dbScenes
       .filter(dbScene => !scenes.find(scene => scene.dbId === dbScene.id.toString()))
-      .map(dbScene => ({
+      .map((dbScene: any) => ({
         id: dbScene.id.toString(),
         name: dbScene.name,
         type: dbScene.type,
-        backgroundImage: dbScene.image || '',
-        backgroundImageSize: { width: 1920, height: 1080 },
+        backgroundImage: dbScene.backgroundImage || '',
+        backgroundImageSize: dbScene.backgroundImageSize || { width: 1920, height: 1080 },
         spaces: [],
-        theme_id: dbScene.theme_id,
+        themeId: dbScene.themeId,
+        themeInfo: dbScene.themeInfo,
         dbId: dbScene.id.toString()
       } as Scene))
   ];

@@ -357,53 +357,26 @@ export default function ProductSwipeDrawer({
         {/* Drawer Header */}
         <div className="flex justify-between items-center px-6 pt-4">
           <div className="flex items-center gap-3">
-            <div className="relative">
-              {/* Circular Progress Indicator */}
-              {artStoryLoading && (
-                <div className="absolute inset-0 w-11 h-11">
-                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 44 44">
-                    <circle
-                      cx="22"
-                      cy="22"
-                      r="20"
-                      stroke="rgba(255, 255, 255, 0.2)"
-                      strokeWidth="2"
-                      fill="none"
-                    />
-                    <circle
-                      cx="22"
-                      cy="22"
-                      r="20"
-                      stroke="white"
-                      strokeWidth="2"
-                      fill="none"
-                      strokeDasharray="125.6"
-                      strokeDashoffset="125.6"
-                      className="animate-spin"
-                      style={{
-                        animation: 'progress-spin 1.5s linear infinite'
-                      }}
-                    />
-                  </svg>
-                </div>
-              )}
-
-              <button
-                onClick={artStory && onStoryClick ? onStoryClick : undefined}
-                disabled={!artStory || artStoryLoading}
-                className={`w-11 h-11 rounded-full bg-white/10 flex items-center justify-center overflow-hidden transition-all ${
-                  artStory && !artStoryLoading ? 'hover:bg-white/20 cursor-pointer' : 'opacity-50 cursor-not-allowed'
-                }`}
-              >
-                <Image
-                  src="/story-icon.png"
-                  alt="Story icon"
-                  width={44}
-                  height={44}
-                  className="w-full h-full object-cover"
-                />
-              </button>
-            </div>
+            {/* Only show story circle if placement has art_story_id */}
+            {placement?.art_story_id && (
+              <div className="relative">              
+                <button
+                  onClick={artStory && onStoryClick ? onStoryClick : undefined}
+                  disabled={!artStory || artStoryLoading}
+                  className={`w-11 h-11 rounded-full bg-white/10 flex items-center justify-center overflow-hidden transition-all ${
+                    artStory && !artStoryLoading ? 'hover:bg-white/20 cursor-pointer' : 'cursor-not-allowed'
+                  }`}
+                >
+                  <Image
+                    src="/story-icon.png"
+                    alt="Story icon"
+                    width={44}
+                    height={44}
+                    className="w-full h-full object-cover"
+                  />
+                </button>
+              </div>
+            )}
             <div className="flex flex-col">
               <h3 className="text-xl text-white font-normal leading-tight overflow-hidden" style={{
                 fontFamily: 'Belleza',
@@ -414,9 +387,12 @@ export default function ProductSwipeDrawer({
               }}>
                 {placement.name}
               </h3>
-              <p className="text-xs text-[#FFEC8E] font-normal leading-tight" style={{ fontFamily: 'Belleza', letterSpacing: '-0.02em' }}>
-                {artStoryLoading ? 'Loading story...' : 'Unfold The Story→'}
-              </p>
+              {/* Only show story text if placement has art_story_id */}
+              {placement?.art_story_id && (
+                <p className="text-xs text-[#FFEC8E] font-normal leading-tight" style={{ fontFamily: 'Belleza', letterSpacing: '-0.02em' }}>
+                  {artStoryLoading ? 'Loading story...' : 'Unfold The Story→'}
+                </p>
+              )}
             </div>
           </div>
           <button 

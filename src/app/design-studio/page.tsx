@@ -276,7 +276,12 @@ function DesignStudioContent() {
     type?: string;
     backgroundImage?: string;
     backgroundImageS3Key?: string;
-    theme_id?: number;
+    themeId?: string;
+    themeInfo?: {
+      id: string;
+      name: string;
+      themeType?: string;
+    };
   } | null>(null);
   
   const [productImageForm, setProductImageForm] = useState({ name: '', image: '' });
@@ -1014,6 +1019,7 @@ function DesignStudioContent() {
 
   // Handle edit scene
   const handleEditScene = useCallback((scene: any) => {
+    console.log('Editing scene with data:', scene);
     setEditingScene({
       id: scene.id,
       dbId: scene.dbId || scene.id,
@@ -1021,7 +1027,8 @@ function DesignStudioContent() {
       type: scene.type,
       backgroundImage: scene.backgroundImage,
       backgroundImageS3Key: scene.backgroundImageS3Key,
-      theme_id: scene.theme_id
+      themeId: scene.themeId,
+      themeInfo: scene.themeInfo
     });
     setShowCreateScene(true); // Reuse the same modal
   }, []);

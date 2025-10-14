@@ -27,6 +27,7 @@ export interface DBPlacement {
   id: number;
   space_id: number;
   name: string;
+  art_story_id?: number | null; // Add art_story_id field
   created_at: string;
   updated_at: string;
 }
@@ -84,6 +85,7 @@ export interface Space {
 export interface Placement {
   id: string;
   name: string;
+  art_story_id?: number | null; // Add art_story_id field
   products: Product[];
   activeProductId?: string;
   dbId?: string; // Database ID
@@ -148,6 +150,7 @@ export interface SpaceConfig {
   placements: Array<{
     id: string;
     name: string;
+    art_story_id?: number | null; // Add art_story_id field
     expanded: boolean;
     visible: boolean;
     products: Array<{

@@ -15,7 +15,12 @@ interface CreateSceneModalProps {
     type?: string;
     backgroundImage?: string;
     backgroundImageS3Key?: string;
-    theme_id?: number;
+    themeId?: string;
+    themeInfo?: {
+      id: string;
+      name: string;
+      themeType?: string;
+    };
   } | null;
 }
 
@@ -30,22 +35,25 @@ export default function CreateSceneModal({ isOpen, onClose, onSceneCreated, edit
   const [newSceneType, setNewSceneType] = useState<string>('');
   const [availableThemes, setAvailableThemes] = useState<DBTheme[]>([]);
 
-  // Update state when editingScene changes
+  // Update state when editingScene changes or modal opens
   useEffect(() => {
-    if (editingScene) {
-      setNewSceneName(editingScene.name);
+    if (isOpen && editingScene) {
+      console.log('Populating edit form with scene data:', editingScene);
+      setNewSceneName(editingScene.name || '');
       setNewSceneImage(editingScene.backgroundImage || '');
       setNewSceneImageS3Key(editingScene.backgroundImageS3Key || '');
       setNewSceneType(editingScene.type || '');
-      setNewSceneThemeId(editingScene.theme_id?.toString() || '');
-    } else {
+      setNewSceneThemeId(editingScene.themeId || editingScene.themeInfo?.id || '');
+    } else if (isOpen && !editingScene) {
+      // Reset form for new scene creation
+      console.log('Resetting form for new scene creation');
       setNewSceneName('');
       setNewSceneImage('');
       setNewSceneImageS3Key('');
       setNewSceneType('');
       setNewSceneThemeId('');
     }
-  }, [editingScene]);
+  }, [editingScene, isOpen]);
 
   // Load themes for scene creation modal
   const loadAvailableThemes = useCallback(async () => {
@@ -128,7 +136,16 @@ export default function CreateSceneModal({ isOpen, onClose, onSceneCreated, edit
 
   // Create or update scene
   const createOrUpdateScene = useCallback(async () => {
-    if (!newSceneName.trim()) return;
+    if (!newSceneName.trim()) {
+      alert('Please enter a scene name');
+      return;
+    }
+    
+    // Validate background image is required
+    if (!newSceneImageS3Key && (!editingScene || !editingScene.backgroundImageS3Key)) {
+      alert('Please upload a background image');
+      return;
+    }
     
     try {
       if (editingScene) {
@@ -275,7 +292,7 @@ export default function CreateSceneModal({ isOpen, onClose, onSceneCreated, edit
               {/* Scene Background Image Upload */}
             <div>
               <label htmlFor="sceneImage" className="block text-sm font-medium text-gray-700 mb-1">
-                Background Image
+                Background Image <span className="text-red-500">*</span>
               </label>
               <div className="flex items-center space-x-3">
                 <button
@@ -305,13 +322,7 @@ export default function CreateSceneModal({ isOpen, onClose, onSceneCreated, edit
                     src={newSceneImage || editingScene?.backgroundImage || ''}
                     alt="Scene preview"
                     className="w-full h-32 object-cover rounded-md border border-gray-300"
-                  />
-                  {editingScene && !newSceneImage && (
-                    <p className="text-xs text-gray-500 mt-1">Current background image</p>
-                  )}
-                  {newSceneImage && editingScene && (
-                    <p className="text-xs text-green-600 mt-1">New background image (click Update Scene to save)</p>
-                  )}
+                  />                  
                 </div>
               )}
             </div>
@@ -327,7 +338,11 @@ export default function CreateSceneModal({ isOpen, onClose, onSceneCreated, edit
             </button>
             <button
               onClick={createOrUpdateScene}
-              disabled={!newSceneName.trim() || uploadingSceneImage}
+              disabled={
+                !newSceneName.trim() || 
+                uploadingSceneImage || 
+                (!newSceneImageS3Key && (!editingScene || !editingScene.backgroundImageS3Key))
+              }
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {editingScene ? 'Update Scene' : 'Create Scene'}
