@@ -67,13 +67,6 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
   const TRANSITION_STYLE = '0.5s ease-out'
 
   /**
-   * Gets the proxied image URL to avoid CORS issues
-   */
-  const getProxiedImageUrl = useCallback((originalUrl: string): string => {
-    return `/api/image-proxy?url=${encodeURIComponent(originalUrl)}`;
-  }, [])
-
-  /**
    * Gets the actual dimensions of an image by loading it and keeps it preloaded
    */
   const getImageDimensions = useCallback((src: string): Promise<{ width: number; height: number }> => {
@@ -86,16 +79,24 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
         resolve({ width: img.naturalWidth, height: img.naturalHeight })
       }
       img.onerror = reject
-      img.src = getProxiedImageUrl(src)
+      img.src = src
     })
-  }, [getProxiedImageUrl])
+  }, [])
 
   /**
-   * Gets actual dimensions for all product images in placements and preloads them
+   * Gets actual dimensions for visible product images first (blocking), then loads others in background
    */
   const getAllProductDimensions = useCallback(async (placements: Placement[]): Promise<void> => {
-    const dimensionPromises = placements.flatMap(placement =>
-      placement.products.map(async (product) => {
+    // First, get visible products that need to be loaded immediately
+    const visibleProducts = placements
+      .filter(placement => placement.visible)
+      .map(placement => placement.products.find(product => product.visible) || placement.products[0])
+      .filter((product): product is ProductImage => product !== null && product !== undefined)
+
+    // Load visible product dimensions first (blocking)
+    const visiblePromises = visibleProducts.flatMap(product => [
+      // Load main product image
+      (async () => {
         try {
           const actualDimensions = await getImageDimensions(product.src)
           product.width = actualDimensions.width
@@ -105,19 +106,49 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
           console.error(`Failed to get dimensions for ${product.name}:`, error)
           // Keep existing dimensions if loading fails
         }
-
-        // Also preload the productInfo.productImage if it exists
-        if (product.productInfo?.productImage) {
+      })(),
+      // Load productInfo image if it exists
+      ...(product.productInfo?.productImage ? [
+        (async () => {
           try {
-            await getImageDimensions(product.productInfo.productImage)
+            await getImageDimensions(product.productInfo!.productImage)
             console.log(`Preloaded productInfo image for ${product.name}`)
           } catch (error) {
             console.error(`Failed to preload productInfo image for ${product.name}:`, error)
           }
+        })()
+      ] : [])
+    ])
+
+    // Wait for visible products to load
+    await Promise.all(visiblePromises)
+
+    // Now load all other products in the background (non-blocking)
+    const allProducts = placements.flatMap(placement => placement.products)
+    const nonVisibleProducts = allProducts.filter(product => !visibleProducts.includes(product))
+
+    // Load non-visible products asynchronously without waiting
+    nonVisibleProducts.forEach(async (product) => {
+      try {
+        const actualDimensions = await getImageDimensions(product.src)
+        product.width = actualDimensions.width
+        product.height = actualDimensions.height
+        console.log(`Background loaded dimensions for ${product.name}:`, actualDimensions)
+      } catch (error) {
+        console.error(`Failed to background load dimensions for ${product.name}:`, error)
+        // Keep existing dimensions if loading fails
+      }
+
+      // Also preload the productInfo.productImage if it exists
+      if (product.productInfo?.productImage) {
+        try {
+          await getImageDimensions(product.productInfo.productImage)
+          console.log(`Background preloaded productInfo image for ${product.name}`)
+        } catch (error) {
+          console.error(`Failed to background preload productInfo image for ${product.name}:`, error)
         }
-      })
-    )
-    await Promise.all(dimensionPromises)
+      }
+    })
   }, [getImageDimensions])
 
   /**
@@ -764,7 +795,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
         >
           {/* Background Image */}
           <img
-            src={getProxiedImageUrl(backgroundImage)}
+            src={backgroundImage}
             alt={`${space.name} - Swipe to explore`}
             className="scene-bg-image absolute top-0 left-0 w-full h-full object-cover select-none"
             crossOrigin="anonymous"
@@ -787,7 +818,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
             return (
               <React.Fragment key={`image-${image.id}`}>
                 <img
-                  src={getProxiedImageUrl(image.src)}
+                  src={image.src}
                   alt={image.name}
                   className="scene-product-image absolute select-none"
                   crossOrigin="anonymous"
