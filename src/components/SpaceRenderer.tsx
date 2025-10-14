@@ -67,20 +67,28 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
   const TRANSITION_STYLE = '0.5s ease-out'
 
   /**
+   * Gets the proxied image URL to avoid CORS issues
+   */
+  const getProxiedImageUrl = useCallback((originalUrl: string): string => {
+    return `/api/image-proxy?url=${encodeURIComponent(originalUrl)}`;
+  }, [])
+
+  /**
    * Gets the actual dimensions of an image by loading it and keeps it preloaded
    */
   const getImageDimensions = useCallback((src: string): Promise<{ width: number; height: number }> => {
     return new Promise((resolve, reject) => {
       const img = document.createElement('img')
+      img.crossOrigin = 'anonymous'
       img.onload = () => {
         // Store the loaded image to keep it cached
         preloadedImagesRef.current.set(src, img)
         resolve({ width: img.naturalWidth, height: img.naturalHeight })
       }
       img.onerror = reject
-      img.src = src
+      img.src = getProxiedImageUrl(src)
     })
-  }, [])
+  }, [getProxiedImageUrl])
 
   /**
    * Gets actual dimensions for all product images in placements and preloads them
@@ -381,7 +389,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
           behavior: 'smooth'
         })
       }
-    }, 500) // Wait for the scaling transition to complete (0.5s)
+    }, 700) // Wait for the scaling transition to complete (0.5s + 0.2s)
   }, [space, calculateScale, getVisibleImage])
 
   /**
@@ -756,9 +764,10 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
         >
           {/* Background Image */}
           <img
-            src={backgroundImage}
+            src={getProxiedImageUrl(backgroundImage)}
             alt={`${space.name} - Swipe to explore`}
             className="scene-bg-image absolute top-0 left-0 w-full h-full object-cover select-none"
+            crossOrigin="anonymous"
             style={{
               touchAction: 'pan-x pan-y',
             }}
@@ -778,9 +787,10 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
             return (
               <React.Fragment key={`image-${image.id}`}>
                 <img
-                  src={image.src}
+                  src={getProxiedImageUrl(image.src)}
                   alt={image.name}
                   className="scene-product-image absolute select-none"
+                  crossOrigin="anonymous"
                   style={{
                     left: `${image.x * scale}px`,
                     top: `${image.y * scale}px`,
