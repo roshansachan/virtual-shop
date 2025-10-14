@@ -118,7 +118,7 @@ export interface Product {
     originalPrice: string;
     discountPercentage: string;
     productImage: string;
-  } 
+  } | null
 }
 
 export interface PlacedProduct {

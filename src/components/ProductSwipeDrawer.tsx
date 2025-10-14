@@ -114,6 +114,19 @@ export default function ProductSwipeDrawer({
     }
   }, [showDeleteConfirm, onDeleteProduct])
 
+  // Handle clicking on a product slide to make it active
+  const handleProductClick = useCallback((product: Product, element: HTMLElement) => {
+    const scrollContainer = scrollContainerRef.current
+    if (!scrollContainer) return
+
+    // Use scrollIntoView to center the clicked element in the viewport
+    element.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+      inline: 'center'
+    })
+  }, [])
+
   // Throttled scroll handler for smooth performance
   const throttledHandleScroll = useMemo(
     () => throttle(() => {
@@ -359,7 +372,7 @@ export default function ProductSwipeDrawer({
           <div className="flex items-center gap-3">
             {/* Only show story circle if placement has art_story_id */}
             {placement?.art_story_id && (
-              <div className="relative">              
+              <div className="relative">
                 <button
                   onClick={artStory && onStoryClick ? onStoryClick : undefined}
                   disabled={!artStory || artStoryLoading}
@@ -378,7 +391,7 @@ export default function ProductSwipeDrawer({
               </div>
             )}
             <div className="flex flex-col">
-              <h3 className="text-xl text-white font-normal leading-tight overflow-hidden" style={{
+              <h3 className="text-base text-white font-normal leading-tight overflow-hidden" style={{
                 fontFamily: 'Belleza',
                 letterSpacing: '-0.02em',
                 display: '-webkit-box',
@@ -389,7 +402,7 @@ export default function ProductSwipeDrawer({
               </h3>
               {/* Only show story text if placement has art_story_id */}
               {placement?.art_story_id && (
-                <p className="text-xs text-[#FFEC8E] font-normal leading-tight" style={{ fontFamily: 'Belleza', letterSpacing: '-0.02em' }}>
+                <p className="text-[10px] text-[#FFEC8E] font-normal leading-tight" style={{ fontFamily: 'Belleza', letterSpacing: '-0.02em' }}>
                   {artStoryLoading ? 'Loading story...' : 'Unfold The Story→'}
                 </p>
               )}
@@ -421,17 +434,21 @@ export default function ProductSwipeDrawer({
               </div>
               
               {placement.products.map((product) => (
-                <div key={product.id} data-product-id={product.id} className={`image-container product-card h-fit flex-shrink-0 snap-center flex items-center justify-center py-4 px-3 ${screenWidth > 0 && (screenHeight / screenWidth) < 2 ? 'w-[50%]' : 'w-[65%]'}`}>
+                <div
+                  key={product.id}
+                  data-product-id={product.id}
+                  className={`image-container product-card h-fit flex-shrink-0 snap-center flex items-center justify-center py-4 px-3 cursor-pointer ${screenWidth > 0 && (screenHeight / screenWidth) < 2 ? 'w-[50%]' : 'w-[65%]'}`}
+                  onClick={(e) => handleProductClick(product, e.currentTarget as HTMLElement)}
+                >
                   <div className="w-full max-w-sm">
                     <div className="relative image-aspect">
                       {/* Product Image - Landscape aspect ratio */}
                       <div className="aspect-[3/2] relative bg-gray-200 rounded-2xl overflow-hidden mb-3">
                         {product.src ? (
-                          <Image
+                          <img
                             src={product?.productInfo?.productImage || product.src} // Fallback to src if productImage is not available
                             alt={product.name}
-                            fill
-                            className="object-cover"
+                            className="absolute inset-0 w-full h-full object-cover"
                             onError={(e) => {
                               // Fallback to grey placeholder on error
                               const target = e.target as HTMLImageElement
@@ -451,11 +468,13 @@ export default function ProductSwipeDrawer({
                           </div>
                         )}
                       </div>
-                      
-                      <div className="absolute bottom-3 left-3">
+
+                      <div className="absolute bottom-0 left-0 w-full h-[101px] bg-gradient-to-b from-black/0 to-black/80" />
+
+                      <div className="absolute bottom-3 left-3 right-3">
                         {/* Product Details */}
                         <div className="text-left mb-2">
-                          <h4 className="text-white text-base font-normal leading-tight mb-1 overflow-hidden" style={{
+                          <h4 className="text-white text-sm font-normal leading-tight mb-1 overflow-hidden" style={{
                             display: '-webkit-box',
                             WebkitLineClamp: 1,
                             WebkitBoxOrient: 'vertical',
@@ -486,7 +505,7 @@ export default function ProductSwipeDrawer({
                         {/* Action Buttons - Row with delete option */}
                         <div className="cta-buttons flex gap-2 transition-opacity duration-300 justify-start">
                           <div className="h-8 sm:px-2.5 py-1 bg-white rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden cursor-pointer hover:bg-gray-100 transition-colors active:scale-95 min-w-[70px] px-[8px]">
-                            <div className="text-[#333333] text-xs font-normal leading-none truncate">
+                            <div className="text-[#333333] text-[10px] font-normal leading-none truncate">
                               Buy Now
                             </div>
                           </div>
