@@ -378,7 +378,7 @@ export default function ProductSwipeDrawer({
                 <button
                   onClick={artStory && onStoryClick ? onStoryClick : undefined}
                   disabled={!artStory || artStoryLoading}
-                  className={`w-11 h-11 rounded-full bg-white/10 flex items-center justify-center overflow-hidden transition-all ${
+                  className={`w-8 h-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden transition-all ${
                     artStory && !artStoryLoading ? 'hover:bg-white/20 cursor-pointer' : 'cursor-not-allowed'
                   }`}
                 >
@@ -397,10 +397,22 @@ export default function ProductSwipeDrawer({
                     <Image
                       src="/story-icon.png"
                       alt="Story icon"
-                      width={44}
-                      height={44}
+                      width={32}
+                      height={32}
                       className="w-full h-full object-cover"
                     />
+                  )}
+                  {/* Show play icon overlay when custom story image exists */}
+                  {artStory?.image && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Image
+                        src="/play-icon.svg"
+                        alt="Play"
+                        width={12}
+                        height={12}
+                        className="w-3 h-3"
+                      />
+                    </div>
                   )}
                 </button>
               ) : (
