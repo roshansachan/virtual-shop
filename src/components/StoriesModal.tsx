@@ -454,28 +454,6 @@ export default function StoriesModal({ isOpen, onClose, artStory }: StoriesModal
           </div>
         )}
       </div>
-
-      {/* Swipe down indicator */}
-      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-30 pointer-events-none">
-        <div className="flex flex-col items-center animate-bounce">
-          <div className="text-white/60 text-xs mb-1 text-center">
-            Swipe down to close
-          </div>
-          <svg 
-            className="w-6 h-6 text-white/60" 
-            fill="none" 
-            stroke="currentColor" 
-            viewBox="0 0 24 24"
-          >
-            <path 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
-              strokeWidth={2} 
-              d="M19 14l-7 7m0 0l-7-7m7 7V3" 
-            />
-          </svg>
-        </div>
-      </div>
     </div>
   );
 }
