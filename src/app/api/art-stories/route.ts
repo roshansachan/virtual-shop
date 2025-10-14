@@ -29,7 +29,7 @@ export async function GET() {
 // POST - Create new art story
 export async function POST(request: NextRequest) {
   try {
-    const { title, stories = [] } = await request.json();
+    const { title, image, stories = [] } = await request.json();
     
     if (!title?.trim()) {
       return NextResponse.json(
@@ -40,8 +40,8 @@ export async function POST(request: NextRequest) {
     
     const client = await pool.connect();
     const result = await client.query(
-      'INSERT INTO art_stories (title, stories) VALUES ($1, $2) RETURNING *',
-      [title.trim(), JSON.stringify(stories)]
+      'INSERT INTO art_stories (title, image, stories) VALUES ($1, $2, $3) RETURNING *',
+      [title.trim(), image || null, JSON.stringify(stories)]
     );
     client.release();
     
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
 // PUT - Update existing art story
 export async function PUT(request: NextRequest) {
   try {
-    const { id, title, stories } = await request.json();
+    const { id, title, image, stories } = await request.json();
     
     if (!id || !title?.trim()) {
       return NextResponse.json(
@@ -72,8 +72,8 @@ export async function PUT(request: NextRequest) {
     
     const client = await pool.connect();
     const result = await client.query(
-      'UPDATE art_stories SET title = $1, stories = $2 WHERE id = $3 RETURNING *',
-      [title.trim(), JSON.stringify(stories || []), id]
+      'UPDATE art_stories SET title = $1, image = $2, stories = $3 WHERE id = $4 RETURNING *',
+      [title.trim(), image || null, JSON.stringify(stories || []), id]
     );
     client.release();
     

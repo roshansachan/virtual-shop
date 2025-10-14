@@ -32,6 +32,7 @@ export async function GET(request: NextRequest, context: Context) {
       SELECT 
         id,
         title,
+        image,
         stories
       FROM art_stories
       WHERE id = $1
@@ -47,6 +48,7 @@ export async function GET(request: NextRequest, context: Context) {
     const artStory = {
       id: result.rows[0].id,
       title: result.rows[0].title,
+      image: result.rows[0].image,
       stories: result.rows[0].stories || []
     };
 

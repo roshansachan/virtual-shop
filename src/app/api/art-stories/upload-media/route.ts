@@ -10,32 +10,53 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File;
     const storyId = formData.get('storyId') as string;
     const itemId = formData.get('itemId') as string;
+    const type = formData.get('type') as string; // 'story-image' for story icons
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    if (!storyId || !itemId) {
-      return NextResponse.json({ error: 'Story ID and Item ID are required' }, { status: 400 });
+    if (!storyId) {
+      return NextResponse.json({ error: 'Story ID is required' }, { status: 400 });
     }
 
-    console.log('Art stories media received:', file.name, 'for story:', storyId, 'item:', itemId);
+    // For story items, itemId is required. For story images, it's not needed
+    if (!type || type !== 'story-image') {
+      if (!itemId) {
+        return NextResponse.json({ error: 'Item ID is required for item uploads' }, { status: 400 });
+      }
+    }
+
+    console.log('Art stories media received:', file.name, 'for story:', storyId, type === 'story-image' ? '(story icon)' : `item: ${itemId}`);
 
     // Validate file type (support both images and videos)
     const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
     const allowedVideoTypes = ['video/mp4', 'video/webm', 'video/ogg', 'video/mov', 'video/avi'];
     const allowedTypes = [...allowedImageTypes, ...allowedVideoTypes];
     
-    if (!allowedTypes.includes(file.type)) {
+    // Story images should only be images
+    if (type === 'story-image' && !allowedImageTypes.includes(file.type)) {
+      return NextResponse.json({ 
+        error: 'Invalid file type for story image. Only images (JPEG, PNG, GIF, WebP) are allowed.' 
+      }, { status: 400 });
+    } else if (type !== 'story-image' && !allowedTypes.includes(file.type)) {
       return NextResponse.json({ 
         error: 'Invalid file type. Only images (JPEG, PNG, GIF, WebP) and videos (MP4, WebM, OGG, MOV, AVI) are allowed.' 
       }, { status: 400 });
     }
 
-    // Validate file size (max 50MB for videos, 10MB for images)
-    const maxSize = file.type.startsWith('video/') ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+    // Validate file size (max 5MB for story images, 50MB for videos, 10MB for item images)
+    let maxSize;
+    if (type === 'story-image') {
+      maxSize = 5 * 1024 * 1024; // 5MB for story icons
+    } else if (file.type.startsWith('video/')) {
+      maxSize = 50 * 1024 * 1024; // 50MB for videos
+    } else {
+      maxSize = 10 * 1024 * 1024; // 10MB for item images
+    }
+    
     if (file.size > maxSize) {
-      const maxSizeMB = file.type.startsWith('video/') ? '50MB' : '10MB';
+      const maxSizeMB = type === 'story-image' ? '5MB' : (file.type.startsWith('video/') ? '50MB' : '10MB');
       return NextResponse.json({ 
         error: `File too large. Maximum size is ${maxSizeMB}.` 
       }, { status: 400 });
@@ -45,8 +66,16 @@ export async function POST(request: NextRequest) {
     const timestamp = Date.now();
     const fileExtension = file.name.split('.').pop();
     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const mediaType = file.type.startsWith('video/') ? 'videos' : 'images';
-    const s3Key = `art-stories/${storyId}/${mediaType}/${itemId}/${timestamp}-${sanitizedFileName}`;
+    
+    let s3Key;
+    if (type === 'story-image') {
+      // For story icons
+      s3Key = `art-stories/${storyId}/story-icon/${timestamp}-${sanitizedFileName}`;
+    } else {
+      // For story item media
+      const mediaType = file.type.startsWith('video/') ? 'videos' : 'images';
+      s3Key = `art-stories/${storyId}/${mediaType}/${itemId}/${timestamp}-${sanitizedFileName}`;
+    }
     
     console.log('Generated S3 key:', s3Key);
 

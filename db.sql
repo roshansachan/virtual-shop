@@ -81,5 +81,6 @@ CREATE INDEX IF NOT EXISTS idx_plimg_product_id   ON placement_images(product_id
 CREATE TABLE IF NOT EXISTS art_stories (
   id      BIGSERIAL PRIMARY KEY,
   title   TEXT NOT NULL,
+  image  TEXT,
   stories JSONB DEFAULT '[]'::jsonb
 );

@@ -17,6 +17,7 @@ interface StoryItem {
 interface ArtStory {
   id: number;
   title: string;
+  image?: string; // S3 key for the 32x32px story image
   stories: StoryItem[];
 }
 
@@ -29,6 +30,7 @@ export default function ManageArtStories() {
   const [isEditingNew, setIsEditingNew] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [uploadingItems, setUploadingItems] = useState<Set<string>>(new Set());
+  const [uploadingStoryImage, setUploadingStoryImage] = useState(false);
 
   // Fetch stories from database
   const fetchStories = useCallback(async () => {
@@ -60,6 +62,7 @@ export default function ManageArtStories() {
     const tempStory: ArtStory = {
       id: 0, // Temporary ID
       title: '',
+      image: undefined,
       stories: []
     };
     setSelectedStory(tempStory);
@@ -88,6 +91,7 @@ export default function ManageArtStories() {
         body: JSON.stringify({
           id: selectedStory.id,
           title: selectedStory.title,
+          image: selectedStory.image,
           stories: selectedStory.stories
         })
       });
@@ -129,6 +133,7 @@ export default function ManageArtStories() {
         },
         body: JSON.stringify({
           title: title.trim(),
+          image: selectedStory?.image,
           stories: selectedStory?.stories || []
         })
       });
@@ -266,6 +271,81 @@ export default function ManageArtStories() {
     }
   }, [selectedStory, handleUpdateItem]);
 
+  // Handle story image upload to S3
+  const handleStoryImageUpload = useCallback(async (file: File, replaceExisting = false) => {
+    if (!selectedStory) return;
+    
+    // Validate file size and dimensions
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      alert('Image file must be smaller than 5MB');
+      return;
+    }
+    
+    try {
+      setUploadingStoryImage(true);
+      
+      // If replacing existing image, we could optionally delete the old one
+      // For now, we'll just replace the reference in the database
+      const oldImageKey = replaceExisting ? selectedStory.image : null;
+      
+      // Create form data for upload
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('storyId', selectedStory.id.toString());
+      formData.append('type', 'story-image');
+      
+      // Upload to S3
+      const response = await fetch('/api/art-stories/upload-media', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || 'Upload failed');
+      }
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        // Update the story with only the S3 key
+        setSelectedStory(prev => prev ? { ...prev, image: result.data.key } : null);
+        
+        if (!isEditingNew) {
+          setHasUnsavedChanges(true);
+        }
+        
+        // Optionally: Clean up old image from S3 in the background
+        if (oldImageKey && replaceExisting) {
+          // We could call a delete API here, but for now we'll just update the reference
+          console.log('Previous image key:', oldImageKey, 'replaced with:', result.data.key);
+        }
+      } else {
+        throw new Error(result.error || 'Upload failed');
+      }
+    } catch (error) {
+      console.error('Error uploading story image:', error);
+      alert(`Failed to upload image: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setUploadingStoryImage(false);
+    }
+  }, [selectedStory, isEditingNew]);
+
+  // Handle removing story image
+  const handleRemoveStoryImage = useCallback(() => {
+    if (!selectedStory || !selectedStory.image) return;
+    
+    if (!confirm('Are you sure you want to remove this story image?')) {
+      return;
+    }
+    
+    setSelectedStory(prev => prev ? { ...prev, image: undefined } : null);
+    
+    if (!isEditingNew) {
+      setHasUnsavedChanges(true);
+    }
+  }, [selectedStory, isEditingNew]);
+
   // Delete story
   const handleDeleteStory = useCallback(async (storyId: number) => {
     if (!confirm('Are you sure you want to delete this story? This action cannot be undone.')) {
@@ -359,9 +439,22 @@ export default function ManageArtStories() {
                         onClick={() => handleSelectStory(story)}
                       >
                         <div className="flex justify-between items-start">
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-medium text-gray-900 truncate">{story.title}</h3>
-                            <p className="text-sm text-gray-500">{story.stories.length} items</p>
+                          <div className="flex items-center space-x-3 flex-1 min-w-0">
+                            {story.image ? (
+                              <img
+                                src={generateS3Url(story.image)}
+                                alt="Story icon"
+                                className="w-8 h-8 object-cover rounded border border-gray-300 flex-shrink-0"
+                              />
+                            ) : (
+                              <div className="w-8 h-8 bg-gray-100 rounded border border-gray-300 flex items-center justify-center flex-shrink-0">
+                                <span className="text-gray-400 text-xs">📚</span>
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-medium text-gray-900 truncate">{story.title}</h3>
+                              <p className="text-sm text-gray-500">{story.stories.length} items</p>
+                            </div>
                           </div>
                           <button
                             onClick={(e) => {
@@ -399,6 +492,85 @@ export default function ManageArtStories() {
                   <p className="text-gray-600 mt-2">
                     {isEditingNew ? "Enter a title and click 'Create Story' to save" : "Create a compelling story with multiple images and videos"}
                   </p>
+                  
+                  {/* Story Image Upload */}
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Story Icon (32x32px recommended)
+                    </label>
+                    {selectedStory.image ? (
+                      <div className="flex items-center space-x-3">
+                        <div className="relative">
+                          <img
+                            src={generateS3Url(selectedStory.image)}
+                            alt="Story icon"
+                            className="w-8 h-8 object-cover rounded border border-gray-300"
+                          />
+                          <button
+                            onClick={handleRemoveStoryImage}
+                            className="absolute -top-1 -right-1 bg-red-600 text-white text-xs w-4 h-4 rounded-full hover:bg-red-700 flex items-center justify-center"
+                            title="Remove image"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <div className="flex space-x-2">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                handleStoryImageUpload(file, true); // true indicates replacing existing
+                              }
+                            }}
+                            disabled={uploadingStoryImage}
+                            className="hidden"
+                            id="story-image-replace"
+                          />
+                          <label
+                            htmlFor="story-image-replace"
+                            className="text-sm text-blue-600 hover:text-blue-700 cursor-pointer"
+                          >
+                            Replace
+                          </label>
+                        </div>
+                      </div>
+                    ) : uploadingStoryImage ? (
+                      <div className="flex items-center space-x-2">
+                        <div className="w-8 h-8 border-2 border-dashed border-blue-300 rounded flex items-center justify-center">
+                          <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                        <span className="text-sm text-blue-600">Uploading...</span>
+                      </div>
+                    ) : (
+                      <div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              handleStoryImageUpload(file, false); // false indicates new upload
+                            }
+                          }}
+                          disabled={uploadingStoryImage}
+                          className="hidden"
+                          id="story-image-upload"
+                        />
+                        <label
+                          htmlFor="story-image-upload"
+                          className="inline-flex items-center space-x-2 px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
+                        >
+                          <span>📷</span>
+                          <span>Upload Icon</span>
+                        </label>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Upload a 32x32px image for the story icon
+                        </p>
+                      </div>
+                    )}
+                  </div>
                   
                   {/* Simple always-visible submit button */}
                   <div className="mt-4 flex items-center space-x-3">

@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import Image from 'next/image'
 import type { Placement, Product } from '../types'
 import closeIcon from '@/assets/close-icon.svg'
+import { generateS3Url } from '@/lib/s3-utils'
 
 // Throttle utility function for better scroll performance
 function throttle<T extends (...args: any[]) => any>(
@@ -30,6 +31,7 @@ interface ProductSwipeDrawerProps {
   artStory?: {
     id: number;
     title: string;
+    image?: string; // S3 key for the story icon
     stories: Array<{
       id: string;
       media: {
@@ -370,9 +372,9 @@ export default function ProductSwipeDrawer({
         {/* Drawer Header */}
         <div className="flex justify-between items-center px-6 pt-4">
           <div className="flex items-center gap-3">
-            {/* Only show story circle if placement has art_story_id */}
-            {placement?.art_story_id && (
-              <div className="relative">
+            {/* Always show story circle - clickable only if placement has art_story_id */}
+            <div className="relative">
+              {placement?.art_story_id ? (
                 <button
                   onClick={artStory && onStoryClick ? onStoryClick : undefined}
                   disabled={!artStory || artStoryLoading}
@@ -380,6 +382,29 @@ export default function ProductSwipeDrawer({
                     artStory && !artStoryLoading ? 'hover:bg-white/20 cursor-pointer' : 'cursor-not-allowed'
                   }`}
                 >
+                  {artStory?.image ? (
+                    <img
+                      src={generateS3Url(artStory.image)}
+                      alt="Story icon"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        // Fallback to default story icon on error
+                        const target = e.target as HTMLImageElement;
+                        target.src = "/story-icon.png";
+                      }}
+                    />
+                  ) : (
+                    <Image
+                      src="/story-icon.png"
+                      alt="Story icon"
+                      width={44}
+                      height={44}
+                      className="w-full h-full object-cover"
+                    />
+                  )}
+                </button>
+              ) : (
+                <div className="w-11 h-11 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
                   <Image
                     src="/story-icon.png"
                     alt="Story icon"
@@ -387,9 +412,9 @@ export default function ProductSwipeDrawer({
                     height={44}
                     className="w-full h-full object-cover"
                   />
-                </button>
-              </div>
-            )}
+                </div>
+              )}
+            </div>
             <div className="flex flex-col">
               <h3 className="text-base text-white font-normal leading-tight overflow-hidden" style={{
                 fontFamily: 'Belleza',
