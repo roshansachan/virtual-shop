@@ -389,7 +389,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
           behavior: 'smooth'
         })
       }
-    }, 500) // Wait for the scaling transition to complete (0.5s)
+    }, 700) // Wait for the scaling transition to complete (0.5s + 0.2s)
   }, [space, calculateScale, getVisibleImage])
 
   /**

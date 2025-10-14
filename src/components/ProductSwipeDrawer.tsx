@@ -498,7 +498,7 @@ export default function ProductSwipeDrawer({
                       <div className="absolute bottom-3 left-3 right-3">
                         {/* Product Details */}
                         <div className="text-left mb-2">
-                          <h4 className="text-white text-sm font-normal leading-tight mb-1 overflow-hidden" style={{
+                          <h4 className="text-white text-[12px] font-normal leading-tight mb-1 overflow-hidden" style={{
                             display: '-webkit-box',
                             WebkitLineClamp: 1,
                             WebkitBoxOrient: 'vertical',
@@ -528,8 +528,8 @@ export default function ProductSwipeDrawer({
 
                         {/* Action Buttons - Row with delete option */}
                         <div className="cta-buttons flex gap-2 transition-opacity duration-300 justify-start">
-                          <div className="h-8 sm:px-2.5 py-1 bg-white rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden cursor-pointer hover:bg-gray-100 transition-colors active:scale-95 min-w-[70px] px-[8px]">
-                            <div className="text-[#333333] text-[10px] font-normal leading-none truncate">
+                          <div className="h-7 sm:px-2.5 py-1 bg-white rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden cursor-pointer hover:bg-gray-100 transition-colors min-w-[78px] px-[8px]">
+                            <div className="text-[#333333] text-[10.5px] font-normal leading-none truncate">
                               Buy Now
                             </div>
                           </div>
