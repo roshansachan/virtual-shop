@@ -871,7 +871,11 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
       {!isNativeFullscreen && (
         <button
           onClick={handleFullscreen}
-          className="fixed bottom-6 right-6 z-20 hover:bg-black text-white transition-all duration-200 hover:scale-110 active:scale-95"
+          className="fixed right-6 z-20 hover:bg-black text-white hover:scale-110 active:scale-95"
+          style={{
+            bottom: showDrawer ? 'calc(30vh + 1.5rem)' : '1.5rem',
+            transition: 'bottom 0.3s ease-out'
+          }}
           title="View in fullscreen"
         >
           <Image src={fullScreenIcon} alt="Fullscreen Icon" className="w-6 h-6" />
