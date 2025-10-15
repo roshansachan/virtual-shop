@@ -543,7 +543,7 @@ export default function ProductSwipeDrawer({
                         <div className="cta-buttons flex gap-2 transition-opacity duration-300 justify-start">
                           <div className="h-7 sm:px-2.5 py-1 bg-white rounded-xs inline-flex justify-center items-center gap-1 overflow-hidden cursor-pointer hover:bg-gray-100 transition-colors min-w-[78px] px-[8px]">
                             <div className="text-[#333333] text-[10.5px] font-normal leading-none truncate">
-                              Buy Now
+                              Add to Bag
                             </div>
                           </div>
 

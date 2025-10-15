@@ -343,7 +343,7 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
         <StaticHeader />
 
         {/* Street View Button */}
-        <div className="flex justify-end">
+        <div className="flex justify-start">
           <button 
             className={`bg-white text-gray-800 px-4 py-2 rounded-[12px] text-xs font-semibold flex items-center gap-0 ${!isHudVisible ? 'pointer-events-none' : 'pointer-events-auto'}`}
             onClick={() => {
