@@ -26,7 +26,7 @@ const corsConfiguration = {
       AllowedOrigins: [
         'http://localhost:3000',
         'http://localhost:3001',
-        'https://your-domain.com', // Replace with your production domain
+        'https://virtual-shop-hazel.vercel.app', // Replace with your production domain
       ],
       ExposeHeaders: ['ETag'],
       MaxAgeSeconds: 3000,

@@ -4,9 +4,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import StaticHeader from './StaticHeader';
 import RoomNavigation from './RoomNavigation';
-import HomeStyleSelector from './HomeStyleSelector';
-import StateCultureSelector from './StateCultureSelector';
-import ThemeSelector from './ThemeSelector';
+import SceneStyleSelector from './SceneStyleSelector';
+import ThemeSelectorPillView from './ThemeSelectorPillView';
+// import ThemeSelector from './ThemeSelector';
 
 interface StaticHUDProps {
   onClose?: () => void;
@@ -178,7 +178,7 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     fetchScenes();
   }, []);
 
-    // Transform scenes for HomeStyleSelector
+    // Transform scenes for SceneStyleSelector
   const homeStyles = allScenes
     .filter(scene => scene.type === 'home')
     .reduce((acc, scene) => {
@@ -208,13 +208,50 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
       themeId?: number;
     }>);
 
-  // Transform scenes for StateCultureSelector
-  const streetStyles = allScenes.filter(scene => scene.type === 'street').map(scene => ({
-    id: scene.id,
-    name: scene.name,
-    image: scene.backgroundImage,
-    themeImage: scene.themeIcon,
-  }));
+  // Transform scenes for street styles
+  const streetStyles = allScenes
+    .filter(scene => scene.type === 'street')
+    .reduce((acc, scene) => {
+      const existingStyle = acc.find(style => style.name === scene.name);
+      if (existingStyle) {
+        // If we already have this style name, check if this scene has a lower themeId
+        const sceneThemeId = scene.themeId ? parseInt(String(scene.themeId), 10) : undefined;
+        const existingThemeId = existingStyle.themeId ? parseInt(String(existingStyle.themeId), 10) : undefined;
+        if (sceneThemeId !== undefined && (existingThemeId === undefined || sceneThemeId < existingThemeId)) {
+          existingStyle.id = scene.id;
+          existingStyle.image = scene.backgroundImage;
+          existingStyle.themeId = scene.themeId;
+        }
+      } else {
+        acc.push({
+          id: scene.id,
+          name: scene.name,
+          image: scene.backgroundImage,
+          themeId: scene.themeId
+        });
+      }
+      return acc;
+    }, [] as Array<{
+      id: string;
+      name: string;
+      image: string;
+      themeId?: number;
+    }>);
+
+  // Transform scenes for ThemeSelectorPillView
+  const availableThemesForSelector = allScenes
+    .filter(scene => scene.name === selectedScene?.name)
+    .sort((a, b) => {
+      const aThemeId = a.themeId ? parseInt(String(a.themeId), 10) : Number.MAX_SAFE_INTEGER;
+      const bThemeId = b.themeId ? parseInt(String(b.themeId), 10) : Number.MAX_SAFE_INTEGER;
+      return aThemeId - bThemeId;
+    })
+    .map(scene => ({
+      id: scene.id,
+      name: scene.themeInfo?.name || scene.name,
+      image: scene.backgroundImage,
+      themeImage: scene.themeIcon,
+    }));
 
   // Set scenes on scene type changes
   useEffect(() => {
@@ -313,6 +350,35 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     }
   };
 
+  const handleStreetStyleSelect = (styleId: string) => {
+    const selectedStyle = streetStyles.find(style => style.id === styleId);
+    if (!selectedStyle) return;
+
+    // Find all scenes with this style name
+    const styleScenes = allScenes.filter(scene => scene.type === 'street' && scene.name === selectedStyle.name);
+
+    if (styleScenes.length > 1) {
+      // Multiple themes available, select the one with lowest themeId by default
+      const sortedScenes = styleScenes.sort((a, b) => {
+        const aThemeId = a.themeId ? parseInt(String(a.themeId), 10) : Number.MAX_SAFE_INTEGER;
+        const bThemeId = b.themeId ? parseInt(String(b.themeId), 10) : Number.MAX_SAFE_INTEGER;
+        return aThemeId - bThemeId;
+      });
+      const defaultScene = sortedScenes[0];
+      if (defaultScene) {
+        setSelectedScene(defaultScene);
+        setShowLeftPanel(false);
+      }
+    } else {
+      // Only one theme, select it directly
+      const scene = styleScenes[0];
+      if (scene) {
+        setSelectedScene(scene);
+        setShowLeftPanel(false);
+      }
+    }
+  };
+
   const handleThemeSelect = (themeId: string) => {
     const scene = allScenes.find(s => s.id === themeId);
     if (scene) {
@@ -321,11 +387,11 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     }
   };
 
-  const handleStreetSceneSelect = (scene: Scene) => {
-    setSelectedSceneType('street');
-    setSelectedScene(scene);
-    setShowLeftPanel(false); // Close the panel when selecting a scene
-  };
+  // const handleStreetSceneSelect = (scene: Scene) => {
+  //   setSelectedSceneType('street');
+  //   setSelectedScene(scene);
+  //   setShowLeftPanel(false); // Close the panel when selecting a scene
+  // };
 
   // Transform spaces for RoomNavigation
   const rooms = spaces.map(space => ({ id: space.id, name: space.name }));
@@ -343,7 +409,7 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
         <StaticHeader />
 
         {/* Street View Button */}
-        <div className="flex justify-end">
+        <div className="flex justify-start">
           <button 
             className={`bg-white text-gray-800 px-4 py-2 rounded-[12px] text-xs font-semibold flex items-center gap-0 ${!isHudVisible ? 'pointer-events-none' : 'pointer-events-auto'}`}
             onClick={() => {
@@ -377,18 +443,17 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
         </div>
       )}
 
-      {selectedSceneType === 'home' && (
-        <HomeStyleSelector
-          styles={homeStyles}
-          selectedStyle={selectedScene?.id || ''}
-          onStyleSelect={handleHomeStyleSelect}
-          showLeftPanel={showLeftPanel}
-          onTogglePanel={() => setShowLeftPanel(!showLeftPanel)}
-          disablePointerEvents={!isHudVisible}
-        />
-      )}
+      <SceneStyleSelector
+        styles={selectedSceneType === 'home' ? homeStyles : streetStyles}
+        selectedStyle={selectedScene?.id || ''}
+        onStyleSelect={selectedSceneType === 'home' ? handleHomeStyleSelect : handleStreetStyleSelect}
+        showLeftPanel={showLeftPanel}
+        onTogglePanel={() => setShowLeftPanel(!showLeftPanel)}
+        disablePointerEvents={!isHudVisible}
+        selectedSceneType={selectedSceneType}
+      />
 
-      {selectedScene && allScenes.filter(scene => scene.type === 'home' && scene.name === selectedScene.name).length > 1 && (
+      {/* {selectedScene && allScenes.filter(scene => scene.type === 'home' && scene.name === selectedScene.name).length > 1 && (
         <ThemeSelector
           themes={availableThemes}
           selectedTheme={selectedScene?.id || ''}
@@ -416,23 +481,20 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
           disablePointerEvents={!isHudVisible}
           styleName={selectedStyleName}
         />
-      )}
+      )} */}
 
       {/* Bottom Navigation */}
       <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-b from-[#100f0e]/0 to-black/60 pointer-events-auto" />
 
       {/* Style Selector Bar */}
-      {selectedSceneType === 'street' && (
+      {selectedScene && allScenes.filter(scene => scene.name === selectedScene.name).length > 1 && (
         <div className={`absolute bottom-0 left-0 right-0 transition-all duration-300 ease-in-out w-full ${
           showLeftPanel || showThemePanel ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
         }`}>
-          <StateCultureSelector
-            styles={streetStyles}
+          <ThemeSelectorPillView
+            styles={availableThemesForSelector}
             selectedStyle={selectedScene?.id || ''}
-            onStyleSelect={(sceneId) => {
-              const scene = allScenes.find(s => s.id === sceneId);
-              if (scene) handleStreetSceneSelect(scene);
-            }}
+            onStyleSelect={handleThemeSelect}
             disablePointerEvents={showLeftPanel || !isHudVisible}
           />
         </div>

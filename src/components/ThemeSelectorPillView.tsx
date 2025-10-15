@@ -9,21 +9,21 @@ interface Style {
   themeImage?: string;
 }
 
-interface StateCultureSelectorProps {
+interface ThemeSelectorPillViewProps {
   styles: Style[];
   selectedStyle: string;
   onStyleSelect: (sceneId: string) => void;
   disablePointerEvents?: boolean;
 }
 
-const StateCultureSelector: React.FC<StateCultureSelectorProps> = ({
+const ThemeSelectorPillView: React.FC<ThemeSelectorPillViewProps> = ({
   styles,
   selectedStyle,
   onStyleSelect,
   disablePointerEvents
 }) => {
   return (
-    <div className={`state-culture-selector flex items-end justify-start w-full gap-4 px-4 py-3 overflow-x-auto h-[150px] ${disablePointerEvents ? 'pointer-events-none' : 'pointer-events-auto'}`}
+    <div className={`state-culture-selector flex items-end justify-center w-full gap-4 px-4 py-3 overflow-x-auto h-[150px] ${disablePointerEvents ? 'pointer-events-none' : 'pointer-events-auto'}`}
          style={{ background: 'linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.64) 100%)' }}>
       {styles.map((style) => (
         <button
@@ -59,4 +59,4 @@ const StateCultureSelector: React.FC<StateCultureSelectorProps> = ({
   );
 };
 
-export default StateCultureSelector;
+export default ThemeSelectorPillView;
