@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
       queryParams.push(sceneType);
     }
     
-    queryText += ` ORDER BY s.created_at DESC, sp.id`;
+    queryText += ` ORDER BY s.order, sp.id`;
 
     // Fetch scenes directly from database
     const result = await query(queryText, queryParams);
