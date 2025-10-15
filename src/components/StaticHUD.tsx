@@ -209,12 +209,19 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     }>);
 
   // Transform scenes for StateCultureSelector
-  const streetStyles = allScenes.filter(scene => scene.type === 'street').map(scene => ({
-    id: scene.id,
-    name: scene.name,
-    image: scene.backgroundImage,
-    themeImage: scene.themeIcon,
-  }));
+  const availableThemesForSelector = allScenes
+    .filter(scene => scene.name === selectedScene?.name)
+    .sort((a, b) => {
+      const aThemeId = a.themeId ? parseInt(String(a.themeId), 10) : Number.MAX_SAFE_INTEGER;
+      const bThemeId = b.themeId ? parseInt(String(b.themeId), 10) : Number.MAX_SAFE_INTEGER;
+      return aThemeId - bThemeId;
+    })
+    .map(scene => ({
+      id: scene.id,
+      name: scene.themeInfo?.name || scene.name,
+      image: scene.backgroundImage,
+      themeImage: scene.themeIcon,
+    }));
 
   // Set scenes on scene type changes
   useEffect(() => {
@@ -321,11 +328,11 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     }
   };
 
-  const handleStreetSceneSelect = (scene: Scene) => {
-    setSelectedSceneType('street');
-    setSelectedScene(scene);
-    setShowLeftPanel(false); // Close the panel when selecting a scene
-  };
+  // const handleStreetSceneSelect = (scene: Scene) => {
+  //   setSelectedSceneType('street');
+  //   setSelectedScene(scene);
+  //   setShowLeftPanel(false); // Close the panel when selecting a scene
+  // };
 
   // Transform spaces for RoomNavigation
   const rooms = spaces.map(space => ({ id: space.id, name: space.name }));
@@ -388,7 +395,7 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
         />
       )}
 
-      {selectedScene && allScenes.filter(scene => scene.type === 'home' && scene.name === selectedScene.name).length > 1 && (
+      {/* {selectedScene && allScenes.filter(scene => scene.type === 'home' && scene.name === selectedScene.name).length > 1 && (
         <ThemeSelector
           themes={availableThemes}
           selectedTheme={selectedScene?.id || ''}
@@ -416,23 +423,20 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
           disablePointerEvents={!isHudVisible}
           styleName={selectedStyleName}
         />
-      )}
+      )} */}
 
       {/* Bottom Navigation */}
       <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-b from-[#100f0e]/0 to-black/60 pointer-events-auto" />
 
       {/* Style Selector Bar */}
-      {selectedSceneType === 'street' && (
+      {selectedScene && allScenes.filter(scene => scene.name === selectedScene.name).length > 1 && (
         <div className={`absolute bottom-0 left-0 right-0 transition-all duration-300 ease-in-out w-full ${
           showLeftPanel || showThemePanel ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
         }`}>
           <StateCultureSelector
-            styles={streetStyles}
+            styles={availableThemesForSelector}
             selectedStyle={selectedScene?.id || ''}
-            onStyleSelect={(sceneId) => {
-              const scene = allScenes.find(s => s.id === sceneId);
-              if (scene) handleStreetSceneSelect(scene);
-            }}
+            onStyleSelect={handleThemeSelect}
             disablePointerEvents={showLeftPanel || !isHudVisible}
           />
         </div>
