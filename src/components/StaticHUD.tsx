@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import StaticHeader from './StaticHeader';
 import RoomNavigation from './RoomNavigation';
-import HomeStyleSelector from './HomeStyleSelector';
+import SceneStyleSelector from './SceneStyleSelector';
 import StateCultureSelector from './StateCultureSelector';
 // import ThemeSelector from './ThemeSelector';
 
@@ -178,7 +178,7 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     fetchScenes();
   }, []);
 
-    // Transform scenes for HomeStyleSelector
+    // Transform scenes for SceneStyleSelector
   const homeStyles = allScenes
     .filter(scene => scene.type === 'home')
     .reduce((acc, scene) => {
@@ -443,7 +443,7 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
         </div>
       )}
 
-      <HomeStyleSelector
+      <SceneStyleSelector
         styles={selectedSceneType === 'home' ? homeStyles : streetStyles}
         selectedStyle={selectedScene?.id || ''}
         onStyleSelect={selectedSceneType === 'home' ? handleHomeStyleSelect : handleStreetStyleSelect}

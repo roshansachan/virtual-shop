@@ -23,7 +23,7 @@ interface HomeStyle {
   image: string;
 }
 
-interface HomeStyleSelectorProps {
+interface SceneStyleSelectorProps {
   styles: HomeStyle[];
   selectedStyle: string;
   onStyleSelect: (styleName: string) => void;
@@ -33,7 +33,7 @@ interface HomeStyleSelectorProps {
   selectedSceneType: 'home' | 'street';
 }
 
-const HomeStyleSelector: React.FC<HomeStyleSelectorProps> = ({ styles, selectedStyle, onStyleSelect, showLeftPanel, onTogglePanel, disablePointerEvents, selectedSceneType }) => {
+const SceneStyleSelector: React.FC<SceneStyleSelectorProps> = ({ styles, selectedStyle, onStyleSelect, showLeftPanel, onTogglePanel, disablePointerEvents, selectedSceneType }) => {
 
   return (
     <>
@@ -94,4 +94,4 @@ const HomeStyleSelector: React.FC<HomeStyleSelectorProps> = ({ styles, selectedS
   );
 };
 
-export default HomeStyleSelector;
+export default SceneStyleSelector;
