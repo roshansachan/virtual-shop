@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import StaticHeader from './StaticHeader';
 import RoomNavigation from './RoomNavigation';
 import SceneStyleSelector from './SceneStyleSelector';
-import StateCultureSelector from './StateCultureSelector';
+import ThemeSelectorPillView from './ThemeSelectorPillView';
 // import ThemeSelector from './ThemeSelector';
 
 interface StaticHUDProps {
@@ -238,7 +238,7 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
       themeId?: number;
     }>);
 
-  // Transform scenes for StateCultureSelector
+  // Transform scenes for ThemeSelectorPillView
   const availableThemesForSelector = allScenes
     .filter(scene => scene.name === selectedScene?.name)
     .sort((a, b) => {
@@ -491,7 +491,7 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
         <div className={`absolute bottom-0 left-0 right-0 transition-all duration-300 ease-in-out w-full ${
           showLeftPanel || showThemePanel ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'
         }`}>
-          <StateCultureSelector
+          <ThemeSelectorPillView
             styles={availableThemesForSelector}
             selectedStyle={selectedScene?.id || ''}
             onStyleSelect={handleThemeSelect}

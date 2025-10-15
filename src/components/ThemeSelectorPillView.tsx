@@ -9,14 +9,14 @@ interface Style {
   themeImage?: string;
 }
 
-interface StateCultureSelectorProps {
+interface ThemeSelectorPillViewProps {
   styles: Style[];
   selectedStyle: string;
   onStyleSelect: (sceneId: string) => void;
   disablePointerEvents?: boolean;
 }
 
-const StateCultureSelector: React.FC<StateCultureSelectorProps> = ({
+const ThemeSelectorPillView: React.FC<ThemeSelectorPillViewProps> = ({
   styles,
   selectedStyle,
   onStyleSelect,
@@ -59,4 +59,4 @@ const StateCultureSelector: React.FC<StateCultureSelectorProps> = ({
   );
 };
 
-export default StateCultureSelector;
+export default ThemeSelectorPillView;
