@@ -6,7 +6,7 @@ import StaticHeader from './StaticHeader';
 import RoomNavigation from './RoomNavigation';
 import HomeStyleSelector from './HomeStyleSelector';
 import StateCultureSelector from './StateCultureSelector';
-import ThemeSelector from './ThemeSelector';
+// import ThemeSelector from './ThemeSelector';
 
 interface StaticHUDProps {
   onClose?: () => void;
@@ -208,6 +208,36 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
       themeId?: number;
     }>);
 
+  // Transform scenes for street styles
+  const streetStyles = allScenes
+    .filter(scene => scene.type === 'street')
+    .reduce((acc, scene) => {
+      const existingStyle = acc.find(style => style.name === scene.name);
+      if (existingStyle) {
+        // If we already have this style name, check if this scene has a lower themeId
+        const sceneThemeId = scene.themeId ? parseInt(String(scene.themeId), 10) : undefined;
+        const existingThemeId = existingStyle.themeId ? parseInt(String(existingStyle.themeId), 10) : undefined;
+        if (sceneThemeId !== undefined && (existingThemeId === undefined || sceneThemeId < existingThemeId)) {
+          existingStyle.id = scene.id;
+          existingStyle.image = scene.backgroundImage;
+          existingStyle.themeId = scene.themeId;
+        }
+      } else {
+        acc.push({
+          id: scene.id,
+          name: scene.name,
+          image: scene.backgroundImage,
+          themeId: scene.themeId
+        });
+      }
+      return acc;
+    }, [] as Array<{
+      id: string;
+      name: string;
+      image: string;
+      themeId?: number;
+    }>);
+
   // Transform scenes for StateCultureSelector
   const availableThemesForSelector = allScenes
     .filter(scene => scene.name === selectedScene?.name)
@@ -320,6 +350,35 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
     }
   };
 
+  const handleStreetStyleSelect = (styleId: string) => {
+    const selectedStyle = streetStyles.find(style => style.id === styleId);
+    if (!selectedStyle) return;
+
+    // Find all scenes with this style name
+    const styleScenes = allScenes.filter(scene => scene.type === 'street' && scene.name === selectedStyle.name);
+
+    if (styleScenes.length > 1) {
+      // Multiple themes available, select the one with lowest themeId by default
+      const sortedScenes = styleScenes.sort((a, b) => {
+        const aThemeId = a.themeId ? parseInt(String(a.themeId), 10) : Number.MAX_SAFE_INTEGER;
+        const bThemeId = b.themeId ? parseInt(String(b.themeId), 10) : Number.MAX_SAFE_INTEGER;
+        return aThemeId - bThemeId;
+      });
+      const defaultScene = sortedScenes[0];
+      if (defaultScene) {
+        setSelectedScene(defaultScene);
+        setShowLeftPanel(false);
+      }
+    } else {
+      // Only one theme, select it directly
+      const scene = styleScenes[0];
+      if (scene) {
+        setSelectedScene(scene);
+        setShowLeftPanel(false);
+      }
+    }
+  };
+
   const handleThemeSelect = (themeId: string) => {
     const scene = allScenes.find(s => s.id === themeId);
     if (scene) {
@@ -384,16 +443,15 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
         </div>
       )}
 
-      {selectedSceneType === 'home' && (
-        <HomeStyleSelector
-          styles={homeStyles}
-          selectedStyle={selectedScene?.id || ''}
-          onStyleSelect={handleHomeStyleSelect}
-          showLeftPanel={showLeftPanel}
-          onTogglePanel={() => setShowLeftPanel(!showLeftPanel)}
-          disablePointerEvents={!isHudVisible}
-        />
-      )}
+      <HomeStyleSelector
+        styles={selectedSceneType === 'home' ? homeStyles : streetStyles}
+        selectedStyle={selectedScene?.id || ''}
+        onStyleSelect={selectedSceneType === 'home' ? handleHomeStyleSelect : handleStreetStyleSelect}
+        showLeftPanel={showLeftPanel}
+        onTogglePanel={() => setShowLeftPanel(!showLeftPanel)}
+        disablePointerEvents={!isHudVisible}
+        selectedSceneType={selectedSceneType}
+      />
 
       {/* {selectedScene && allScenes.filter(scene => scene.type === 'home' && scene.name === selectedScene.name).length > 1 && (
         <ThemeSelector

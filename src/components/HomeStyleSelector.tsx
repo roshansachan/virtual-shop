@@ -30,19 +30,20 @@ interface HomeStyleSelectorProps {
   showLeftPanel: boolean;
   onTogglePanel: () => void;
   disablePointerEvents?: boolean;
+  selectedSceneType: 'home' | 'street';
 }
 
-const HomeStyleSelector: React.FC<HomeStyleSelectorProps> = ({ styles, selectedStyle, onStyleSelect, showLeftPanel, onTogglePanel, disablePointerEvents }) => {
+const HomeStyleSelector: React.FC<HomeStyleSelectorProps> = ({ styles, selectedStyle, onStyleSelect, showLeftPanel, onTogglePanel, disablePointerEvents, selectedSceneType }) => {
 
   return (
     <>
       {/* Left Panel Toggle */}
-      <div className={`absolute inline-flex bg-black/50 rounded-b-lg p-2 pointer-events-auto origin-top-left -rotate-90 transition-all duration-300 ease-in-out font-belleza ${showLeftPanel ? 'left-52 top-96' : 'left-0 top-96'} ${disablePointerEvents ? 'pointer-events-none' : 'pointer-events-auto'}`}>
+      <div className={`absolute inline-flex bg-black/50 rounded-b-lg p-2 pointer-events-auto origin-top-left -rotate-90 transition-all duration-300 ease-in-out font-belleza ${showLeftPanel ? 'left-52 top-[55%]' : 'left-0 top-[55%]'} ${disablePointerEvents ? 'pointer-events-none' : 'pointer-events-auto'}`}>
         <button
           onClick={onTogglePanel}
           className="text-white text-xs uppercase writing-mode-vertical-rl transform px-2"
         >
-          HOME STYLES
+          {selectedSceneType === 'home' ? 'HOME STYLES' : 'STREET STYLES'}
         </button>
         <ChevronRight size={16} className={`transition-transform duration-300 ease-in-out text-white ${showLeftPanel ? "-rotate-90" : "rotate-90"}`} />
       </div>
@@ -55,7 +56,7 @@ const HomeStyleSelector: React.FC<HomeStyleSelectorProps> = ({ styles, selectedS
       }`}>
         <div className="p-4">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-white text-sm uppercase font-normal">HOME STYLES</h3>
+            <h3 className="text-white text-sm uppercase font-normal">{selectedSceneType === 'home' ? 'HOME STYLES' : 'STREET STYLES'}</h3>
             <button
               onClick={onTogglePanel}
               className="w-6 h-6 bg-transparent rounded-full flex items-center justify-center"
