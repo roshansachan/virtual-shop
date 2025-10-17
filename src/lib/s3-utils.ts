@@ -6,12 +6,12 @@ export function generateS3Url(key: string): string {
   const bucketName = 
     (typeof window !== 'undefined' 
       ? process.env.NEXT_PUBLIC_AWS_BUCKET_NAME 
-      : process.env.AWS_BUCKET_NAME) || 'o1-virtual-shop';
+      : process.env.AWS_BUCKET_NAME);
       
   const region = 
     (typeof window !== 'undefined' 
       ? process.env.NEXT_PUBLIC_AWS_REGION 
-      : process.env.AWS_REGION) || 'ap-south-1';
+      : process.env.AWS_REGION);
       
   return `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
 }

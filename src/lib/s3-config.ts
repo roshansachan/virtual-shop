@@ -3,7 +3,7 @@ import { S3Client } from '@aws-sdk/client-s3';
 // Initialize S3 client
 export function getS3Client(): S3Client {
   return new S3Client({
-    region: process.env.AWS_REGION || 'ap-south-1',
+    region: process.env.AWS_REGION,
     credentials: {
       accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
       secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
@@ -13,12 +13,12 @@ export function getS3Client(): S3Client {
 
 // Get AWS bucket name
 export function getAWSBucketName(): string {
-  return process.env.AWS_BUCKET_NAME || 'o1-virtual-shop';
+  return process.env.AWS_BUCKET_NAME;
 }
 
 // Get AWS region
 export function getAWSRegion(): string {
-  return process.env.AWS_REGION || 'ap-south-1';
+  return process.env.AWS_REGION;
 }
 
 // Generate S3 URL from key
