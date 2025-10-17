@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, testConnection } from '@/lib/database';
-import { s3KeyToUrl, isS3Url } from '@/lib/s3-utils';
+import { s3KeyToUrl, isS3Url, s3UrlToCdnUrl } from '@/lib/s3-utils';
 import { getS3Client, getAWSBucketName } from '@/lib/s3-config';
 import { DeleteObjectCommand } from '@aws-sdk/client-s3';
 
@@ -112,14 +112,18 @@ export async function GET(
     const spaceConfig = {
       id: spaceData.space_id.toString(),
       name: spaceData.space_name,
-      backgroundImage: spaceData.space_image && !isS3Url(spaceData.space_image)
-        ? s3KeyToUrl(spaceData.space_image)
-        : spaceData.space_image,
+      backgroundImage: spaceData.space_image
+        ? (isS3Url(spaceData.space_image)
+            ? s3UrlToCdnUrl(spaceData.space_image)
+            : s3KeyToUrl(spaceData.space_image))
+        : null,
       type: spaceData.space_type,
       themeId: spaceData.theme_id ? spaceData.theme_id.toString() : null,
-      themeIcon: spaceData.theme_icon && !isS3Url(spaceData.theme_icon)
-        ? s3KeyToUrl(spaceData.theme_icon)
-        : spaceData.theme_icon,
+      themeIcon: spaceData.theme_icon
+        ? (isS3Url(spaceData.theme_icon)
+            ? s3UrlToCdnUrl(spaceData.theme_icon)
+            : s3KeyToUrl(spaceData.theme_icon))
+        : null,
       // Note: backgroundImageSize will be determined client-side when image loads
       placements: [] as any[]
     };
@@ -152,9 +156,11 @@ export async function GET(
         placement.products.push({
           id: row.placement_image_id.toString(),
           name: row.placement_image_name || row.product_name || 'Unnamed Product',
-          src: row.placement_image && !isS3Url(row.placement_image)
-            ? s3KeyToUrl(row.placement_image)
-            : row.placement_image,
+          src: row.placement_image
+            ? (isS3Url(row.placement_image)
+                ? s3UrlToCdnUrl(row.placement_image)
+                : s3KeyToUrl(row.placement_image))
+            : null,
           productImage: row.product_image,
           s3Key: row.placement_image,
           visible: row.is_visible || false,
@@ -167,9 +173,11 @@ export async function GET(
             productName: row.product_name,
             originalPrice: row.original_price,
             discountPercentage: row.discount_percentage,
-            productImage: row.product_image && !isS3Url(row.product_image)
-              ? s3KeyToUrl(row.product_image)
-              : row.product_image
+            productImage: row.product_image
+              ? (isS3Url(row.product_image)
+                  ? s3UrlToCdnUrl(row.product_image)
+                  : s3KeyToUrl(row.product_image))
+              : null
           } : null
         });
       }

@@ -16,10 +16,52 @@ export function generateS3Url(key: string): string {
   return `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
 }
 
+// Generate CDN URL from key - uses CDN_ENDPOINT_URL if available
+export function generateCdnUrl(key: string): string {
+  // Try to get CDN endpoint URL, fallback to S3 URL if not available
+  const cdnEndpoint = 
+    (typeof window !== 'undefined' 
+      ? process.env.NEXT_PUBLIC_CDN_ENDPOINT_URL 
+      : process.env.CDN_ENDPOINT_URL);
+      
+  if (cdnEndpoint) {
+    // Ensure the CDN endpoint ends with a slash
+    const normalizedEndpoint = cdnEndpoint.endsWith('/') ? cdnEndpoint : `${cdnEndpoint}/`;
+    return `${normalizedEndpoint}${key}`;
+  }
+  
+  // Fallback to S3 URL if CDN endpoint is not configured
+  return generateS3Url(key);
+}
+
+// Convert S3 URL to CDN URL by replacing the domain
+export function s3UrlToCdnUrl(s3Url: string): string {
+  if (!isS3Url(s3Url)) {
+    return s3Url; // Return as-is if not an S3 URL
+  }
+  
+  const cdnEndpoint = 
+    (typeof window !== 'undefined' 
+      ? process.env.NEXT_PUBLIC_CDN_ENDPOINT_URL 
+      : process.env.CDN_ENDPOINT_URL);
+      
+  if (!cdnEndpoint) {
+    return s3Url; // Return S3 URL if CDN endpoint is not configured
+  }
+  
+  // Extract the key from S3 URL
+  const key = s3UrlToKey(s3Url);
+  if (!key) {
+    return s3Url; // Return as-is if key extraction fails
+  }
+  
+  return generateCdnUrl(key);
+}
+
 // Convert S3 key to URL, handling null/undefined values
 export function s3KeyToUrl(key: string | null | undefined): string | null {
   if (!key) return null;
-  return generateS3Url(key);
+  return generateCdnUrl(key);
 }
 
 // Convert S3 URL back to key (useful for migration)
