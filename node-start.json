@@ -1,0 +1,16 @@
+{
+  "apps": [
+    {
+      "name": "virtual-shop",
+      "script": "npm",
+      "args": "start",
+      "instances": 4,
+      "autorestart": true,
+      "watch": false,
+      "max_memory_restart": "1G",
+      "env": {
+        "NODE_ENV": "production"
+      }
+    }
+  ]
+}
