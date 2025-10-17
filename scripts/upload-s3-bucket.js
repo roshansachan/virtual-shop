@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 /**
- * Script to upload all files from o1-virtual-shop directory to S3 bucket
+ * Script to upload all files from aws-bucket directory to S3 bucket
  * Preserves directory structure as S3 keys
- * Run with: node scripts/upload-o1-virtual-shop.js
+ * Run with: node scripts/upload-s3-bucket.js
  */
 
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
@@ -21,7 +21,7 @@ const s3Client = new S3Client({
 });
 
 const bucketName = process.env.AWS_BUCKET_NAME || 'roposo-us-commerce';
-const sourceDir = path.join(process.cwd(), 'o1-virtual-shop');
+const sourceDir = path.join(process.cwd(), process.env.AWS_BUCKET_NAME || 'roposo-us-commerce');
 
 async function uploadFileToS3(filePath, s3Key) {
   try {
@@ -33,6 +33,7 @@ async function uploadFileToS3(filePath, s3Key) {
       Key: s3Key,
       Body: fileContent,
       ContentType: contentType,
+      ACL: 'public-read',
     });
 
     await s3Client.send(uploadCommand);

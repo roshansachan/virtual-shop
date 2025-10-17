@@ -27,6 +27,8 @@ const corsConfiguration = {
         'http://localhost:3000',
         'http://localhost:3001',
         'https://virtual-shop-hazel.vercel.app', // Replace with your production domain
+        'http://34.227.153.129', // Temp
+        'https://mool.zyxw365.in'
       ],
       ExposeHeaders: ['ETag'],
       MaxAgeSeconds: 3000,
