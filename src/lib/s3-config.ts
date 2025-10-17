@@ -13,12 +13,12 @@ export function getS3Client(): S3Client {
 
 // Get AWS bucket name
 export function getAWSBucketName(): string {
-  return process.env.AWS_BUCKET_NAME;
+  return process.env.AWS_BUCKET_NAME || '';
 }
 
 // Get AWS region
 export function getAWSRegion(): string {
-  return process.env.AWS_REGION;
+  return process.env.AWS_REGION || '';
 }
 
 // Generate S3 URL from key
