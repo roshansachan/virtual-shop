@@ -5,12 +5,15 @@
       "script": "npm",
       "args": "start",
       "instances": 4,
+      "exec_mode": "fork",
       "autorestart": true,
       "watch": false,
       "max_memory_restart": "1G",
       "env": {
-        "NODE_ENV": "production"
-      }
+        "NODE_ENV": "production",
+        "PORT": 3000
+      },
+      "increment_var": "PORT"
     }
   ]
 }
