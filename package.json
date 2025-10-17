@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "start-prod": "pm2 start node-start.json",
+    "start-prod": "next build && pm2 start node-start.json",
     "lint": "eslint"
   },
   "dependencies": {
