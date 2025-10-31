@@ -42,9 +42,10 @@ interface SpaceRendererProps {
   spaceId: string | null;
   hideIndicators?: boolean
   onDrawerStateChange?: (isOpen: boolean) => void;
+  onFirstRenderCompleted?: () => void;
 }
 
-export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawerStateChange }: SpaceRendererProps) {
+export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawerStateChange, onFirstRenderCompleted }: SpaceRendererProps) {
   const [space, setSpace] = useState<SpaceConfig | null>(null)
   const [scale, setScale] = useState(1)
   const [loading, setLoading] = useState(true)
@@ -84,9 +85,9 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
   }, [])
 
   /**
-   * Gets actual dimensions for visible product images first (blocking), then loads others in background
+   * Gets essential product dimensions for visible products (blocking load)
    */
-  const getAllProductDimensions = useCallback(async (placements: Placement[]): Promise<void> => {
+  const getEssentialProductDimensions = useCallback(async (placements: Placement[]): Promise<void> => {
     // First, get visible products that need to be loaded immediately
     const visibleProducts = placements
       .filter(placement => placement.visible)
@@ -111,9 +112,18 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
 
     // Wait for visible products to load
     await Promise.all(visiblePromises)
+  }, [getImageDimensions])
 
+  /**
+   * Gets actual dimensions for visible product images first (blocking), then loads others in background
+   */
+  const getAllProductDimensions = useCallback(async (placements: Placement[]): Promise<void> => {
     // Now load all other products in the background (non-blocking)
     const allProducts = placements.flatMap(placement => placement.products)
+    const visibleProducts = placements
+      .filter(placement => placement.visible)
+      .map(placement => placement.products.find(product => product.visible) || placement.products[0])
+      .filter((product): product is ProductImage => product !== null && product !== undefined)
     const nonVisibleProducts = allProducts.filter(product => !visibleProducts.includes(product))
 
     // Load non-visible products asynchronously without waiting
@@ -168,26 +178,41 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
 
       const spaceData = spaceDataRes.data
 
-      // Get actual background image dimensions
+      // Load essential product dimensions and background image dimensions in parallel
+      const parallelPromises = []
+
+      if (spaceData.placements && spaceData.placements.length > 0) {
+        parallelPromises.push(getEssentialProductDimensions(spaceData.placements))
+      }
+
       if (spaceData.backgroundImage || spaceData.image) {
         const backgroundSrc = spaceData.backgroundImage || spaceData.image
-        try {
-          const actualDimensions = await getImageDimensions(backgroundSrc)
-          spaceData.backgroundImageSize = actualDimensions
-          console.log('Actual background image dimensions:', actualDimensions)
-        } catch (error) {
-          console.error('Failed to get background image dimensions:', error)
-          // Keep existing dimensions if available, or use defaults
-          if (!spaceData.backgroundImageSize) {
-            spaceData.backgroundImageSize = { width: 1920, height: 1080 }
-          }
-        }
+        parallelPromises.push(
+          getImageDimensions(backgroundSrc)
+            .then(actualDimensions => {
+              spaceData.backgroundImageSize = actualDimensions
+              console.log('Actual background image dimensions:', actualDimensions)
+            })
+            .catch(error => {
+              console.error('Failed to get background image dimensions:', error)
+              // Keep existing dimensions if available, or use defaults
+              if (!spaceData.backgroundImageSize) {
+                spaceData.backgroundImageSize = { width: 1920, height: 1080 }
+              }
+            })
+        )
       }
+
+      // Wait for both operations to complete
+      await Promise.all(parallelPromises)
 
       // Get actual dimensions for all product images
       if (spaceData.placements && spaceData.placements.length > 0) {
         await getAllProductDimensions(spaceData.placements)
       }
+
+      // Signal that first render is completed (visible products loaded)
+      onFirstRenderCompleted?.()
 
       setSpace(spaceData)
     } catch (err) {
@@ -196,7 +221,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
     } finally {
       setLoading(false)
     }
-  }, [spaceId, getImageDimensions, getAllProductDimensions])
+  }, [spaceId, getImageDimensions, getEssentialProductDimensions, getAllProductDimensions, onFirstRenderCompleted])
 
   /**
    * Calculates the scaling factor based on background dimensions and viewport
