@@ -106,18 +106,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
           console.error(`Failed to get dimensions for ${product.name}:`, error)
           // Keep existing dimensions if loading fails
         }
-      })(),
-      // Load productInfo image if it exists
-      ...(product.productInfo?.productImage ? [
-        (async () => {
-          try {
-            await getImageDimensions(product.productInfo!.productImage)
-            console.log(`Preloaded productInfo image for ${product.name}`)
-          } catch (error) {
-            console.error(`Failed to preload productInfo image for ${product.name}:`, error)
-          }
-        })()
-      ] : [])
+      })()
     ])
 
     // Wait for visible products to load
@@ -138,8 +127,11 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
         console.error(`Failed to background load dimensions for ${product.name}:`, error)
         // Keep existing dimensions if loading fails
       }
+    })
 
-      // Also preload the productInfo.productImage if it exists
+    // Load productInfo images for all products asynchronously without waiting
+    allProducts.forEach(async (product) => {
+      // Also preload the productInfo.productImage if it exists (for all products, including visible ones)
       if (product.productInfo?.productImage) {
         try {
           await getImageDimensions(product.productInfo.productImage)
