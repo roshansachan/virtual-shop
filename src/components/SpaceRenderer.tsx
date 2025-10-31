@@ -63,6 +63,8 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const preloadedImagesRef = useRef<Map<string, HTMLImageElement>>(new Map())
+  const currentSpaceIdRef = useRef<string | null>(null)
+  const ongoingImageLoadsRef = useRef<Set<HTMLImageElement>>(new Set())
 
   // Common transition style for easy customization
   const TRANSITION_STYLE = '0.5s ease-out'
@@ -72,17 +74,45 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
    */
   const getImageDimensions = useCallback((src: string): Promise<{ width: number; height: number }> => {
     return new Promise((resolve, reject) => {
+      // Check if this request is for a different space (aborted)
+      if (currentSpaceIdRef.current !== spaceId) {
+        reject(new Error('Image loading aborted due to space change'))
+        return
+      }
+
       const img = document.createElement('img')
       img.crossOrigin = 'anonymous'
+
+      // Track this image load
+      ongoingImageLoadsRef.current.add(img)
+
+      const cleanup = () => {
+        ongoingImageLoadsRef.current.delete(img)
+      }
+
       img.onload = () => {
+        cleanup()
+        // Double-check if still for current space before resolving
+        if (currentSpaceIdRef.current !== spaceId) {
+          reject(new Error('Image loading aborted due to space change'))
+          return
+        }
+
         // Store the loaded image to keep it cached
         preloadedImagesRef.current.set(src, img)
         resolve({ width: img.naturalWidth, height: img.naturalHeight })
       }
-      img.onerror = reject
+      img.onerror = (error) => {
+        cleanup()
+        // Don't reject if aborted due to space change
+        if (currentSpaceIdRef.current !== spaceId) {
+          return
+        }
+        reject(error)
+      }
       img.src = src
     })
-  }, [])
+  }, [spaceId])
 
   /**
    * Gets essential product dimensions for visible products (blocking load)
@@ -158,6 +188,9 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
    */
   const loadSpace = useCallback(async () => {
     try {
+      // Update current space ID at the start
+      currentSpaceIdRef.current = spaceId
+
       setLoading(true)
       setError(null)
 
@@ -584,10 +617,33 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
     loadSpace()
   }, [spaceId, loadSpace])
 
-  // Clear preloaded images when space changes
+  // Clear preloaded images and abort ongoing loads when space changes
   useEffect(() => {
+    // Abort ongoing image loads by clearing their src and removing them from tracking
+    ongoingImageLoadsRef.current.forEach(img => {
+      img.src = '' // Clear src to abort loading
+      img.onload = null
+      img.onerror = null
+    })
+    ongoingImageLoadsRef.current.clear()
+
     preloadedImagesRef.current.clear()
+    currentSpaceIdRef.current = spaceId
   }, [spaceId])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    const ongoingLoads = ongoingImageLoadsRef.current
+    return () => {
+      // Abort any ongoing image loads
+      ongoingLoads.forEach(img => {
+        img.src = ''
+        img.onload = null
+        img.onerror = null
+      })
+      ongoingLoads.clear()
+    }
+  }, [])
 
   // Update scaling when space loads or window resizes
   useEffect(() => {
