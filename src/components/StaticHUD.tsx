@@ -13,6 +13,7 @@ interface StaticHUDProps {
   selectedSpace?: string | null;
   onSelectedSpaceChange?: (spaceId: string | null) => void;
   isProductDrawerOpen?: boolean;
+  firstRenderCompleted?: boolean;
 }
 
 interface Scene {
@@ -58,7 +59,7 @@ const HomeIcon = () => (
   </svg>
 );
 
-const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceChange, isProductDrawerOpen = false }) => {
+const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceChange, isProductDrawerOpen = false, firstRenderCompleted = false }) => {
   const searchParams = useSearchParams();
   const [selectedSceneType, setSelectedSceneType] = useState<'home' | 'street'>(() => {
     const sceneType = searchParams.get('sceneType');
@@ -443,15 +444,17 @@ const StaticHUD: React.FC<StaticHUDProps> = ({ selectedSpace, onSelectedSpaceCha
         </div>
       )}
 
-      <SceneStyleSelector
-        styles={selectedSceneType === 'home' ? homeStyles : streetStyles}
-        selectedStyle={selectedScene?.id || ''}
-        onStyleSelect={selectedSceneType === 'home' ? handleHomeStyleSelect : handleStreetStyleSelect}
-        showLeftPanel={showLeftPanel}
-        onTogglePanel={() => setShowLeftPanel(!showLeftPanel)}
-        disablePointerEvents={!isHudVisible}
-        selectedSceneType={selectedSceneType}
-      />
+      {firstRenderCompleted && (
+        <SceneStyleSelector
+          styles={selectedSceneType === 'home' ? homeStyles : streetStyles}
+          selectedStyle={selectedScene?.id || ''}
+          onStyleSelect={selectedSceneType === 'home' ? handleHomeStyleSelect : handleStreetStyleSelect}
+          showLeftPanel={showLeftPanel}
+          onTogglePanel={() => setShowLeftPanel(!showLeftPanel)}
+          disablePointerEvents={!isHudVisible}
+          selectedSceneType={selectedSceneType}
+        />
+      )}
 
       {/* {selectedScene && allScenes.filter(scene => scene.type === 'home' && scene.name === selectedScene.name).length > 1 && (
         <ThemeSelector

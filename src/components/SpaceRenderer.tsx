@@ -42,9 +42,10 @@ interface SpaceRendererProps {
   spaceId: string | null;
   hideIndicators?: boolean
   onDrawerStateChange?: (isOpen: boolean) => void;
+  onFirstRenderCompleted?: () => void;
 }
 
-export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawerStateChange }: SpaceRendererProps) {
+export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawerStateChange, onFirstRenderCompleted }: SpaceRendererProps) {
   const [space, setSpace] = useState<SpaceConfig | null>(null)
   const [scale, setScale] = useState(1)
   const [loading, setLoading] = useState(true)
@@ -189,6 +190,9 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
         await getAllProductDimensions(spaceData.placements)
       }
 
+      // Signal that first render is completed (visible products loaded)
+      onFirstRenderCompleted?.()
+
       setSpace(spaceData)
     } catch (err) {
       console.error('Error loading space:', err)
@@ -196,7 +200,7 @@ export default function SpaceRenderer({ spaceId, hideIndicators = false, onDrawe
     } finally {
       setLoading(false)
     }
-  }, [spaceId, getImageDimensions, getAllProductDimensions])
+  }, [spaceId, getImageDimensions, getAllProductDimensions, onFirstRenderCompleted])
 
   /**
    * Calculates the scaling factor based on background dimensions and viewport
